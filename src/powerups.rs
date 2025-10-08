@@ -8,9 +8,11 @@ impl Plugin for PowerupsPlugin {
         app.insert_resource(PowerupState {
             showing: false,
             options: vec![],
+            selected_index: 0,
         })
         .add_systems(Update, (
             handle_level_up,
+            handle_powerup_navigation,
             handle_powerup_selection,
         ));
     }
@@ -20,6 +22,7 @@ impl Plugin for PowerupsPlugin {
 pub struct PowerupState {
     pub showing: bool,
     pub options: Vec<PowerupType>,
+    pub selected_index: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -56,6 +59,7 @@ impl PowerupType {
 #[derive(Component)]
 struct PowerupButton {
     powerup_type: PowerupType,
+    index: usize,
 }
 
 fn handle_level_up(
@@ -86,6 +90,7 @@ fn handle_level_up(
 
         powerup_state.showing = true;
         powerup_state.options = options.clone();
+        powerup_state.selected_index = 0;
 
         // Pause the game
         time.pause();
@@ -129,7 +134,14 @@ fn handle_level_up(
         commands.entity(button_container).add_child(title);
 
         // Create buttons for each option
-        for powerup in options.iter() {
+        for (index, powerup) in options.iter().enumerate() {
+            // First button is selected by default
+            let bg_color = if index == 0 {
+                Color::srgb(0.3, 0.3, 0.5) // Highlighted
+            } else {
+                Color::srgb(0.2, 0.2, 0.3) // Normal
+            };
+
             let button = commands.spawn((
                 Button,
                 Node {
@@ -140,9 +152,10 @@ fn handle_level_up(
                     padding: UiRect::all(Val::Px(10.0)),
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.2, 0.2, 0.3)),
+                BackgroundColor(bg_color),
                 PowerupButton {
                     powerup_type: powerup.clone(),
+                    index,
                 },
             )).id();
 
@@ -183,15 +196,16 @@ struct PowerupUIContainer;
 fn handle_powerup_selection(
     mut commands: Commands,
     mut interaction_query: Query<
-        (&Interaction, &PowerupButton, &mut BackgroundColor),
+        (&PowerupButton, &Interaction, &mut BackgroundColor),
         Changed<Interaction>,
     >,
     mut powerup_state: ResMut<PowerupState>,
     ui_query: Query<Entity, With<PowerupUIContainer>>,
     mut player_query: Query<(Entity, &mut crate::player::Player)>,
     mut time: ResMut<Time<Virtual>>,
+    gamepads: Query<&Gamepad>,
 ) {
-    for (interaction, button, mut bg_color) in interaction_query.iter_mut() {
+    for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
                 // Apply powerup
@@ -232,6 +246,107 @@ fn handle_powerup_selection(
             }
             Interaction::None => {
                 *bg_color = Color::srgb(0.2, 0.2, 0.3).into();
+            }
+        }
+    }
+
+    // Gamepad selection
+    if !powerup_state.showing {
+        return;
+    }
+
+    for gamepad in gamepads.iter() {
+        if gamepad.just_pressed(GamepadButton::South) {
+            // Find the button at the selected index
+            for (button, _, _) in interaction_query.iter() {
+                if button.index == powerup_state.selected_index {
+                    // Apply powerup
+                    if let Ok((player_entity, mut player)) = player_query.get_single_mut() {
+                        match button.powerup_type {
+                            PowerupType::OrbitingBlade => {
+                                crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1);
+                            }
+                            PowerupType::AutoShooter => {
+                                crate::weapons::spawn_auto_shooter(&mut commands, player_entity);
+                            }
+                            PowerupType::SpeedBoost => {
+                                player.speed += 50.0;
+                            }
+                            PowerupType::JumpBoost => {
+                                player.jump_force += 100.0;
+                            }
+                            PowerupType::MaxHealthIncrease => {
+                                player.max_health += 20.0;
+                                player.health = player.max_health;
+                            }
+                        }
+                    }
+
+                    // Remove UI
+                    for entity in ui_query.iter() {
+                        commands.entity(entity).despawn_recursive();
+                    }
+
+                    powerup_state.showing = false;
+                    powerup_state.options.clear();
+
+                    // Resume the game
+                    time.unpause();
+                    break;
+                }
+            }
+        }
+    }
+}
+
+fn handle_powerup_navigation(
+    mut powerup_state: ResMut<PowerupState>,
+    gamepads: Query<&Gamepad>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut button_query: Query<(&PowerupButton, &mut BackgroundColor)>,
+) {
+    if !powerup_state.showing || powerup_state.options.is_empty() {
+        return;
+    }
+
+    let mut direction = 0i32;
+
+    // Keyboard navigation
+    if keyboard.just_pressed(KeyCode::ArrowUp) || keyboard.just_pressed(KeyCode::KeyW) {
+        direction = -1;
+    }
+    if keyboard.just_pressed(KeyCode::ArrowDown) || keyboard.just_pressed(KeyCode::KeyS) {
+        direction = 1;
+    }
+
+    // Gamepad navigation
+    for gamepad in gamepads.iter() {
+        if gamepad.just_pressed(GamepadButton::DPadUp) {
+            direction = -1;
+        }
+        if gamepad.just_pressed(GamepadButton::DPadDown) {
+            direction = 1;
+        }
+    }
+
+    if direction != 0 {
+        let num_options = powerup_state.options.len();
+        if direction < 0 {
+            powerup_state.selected_index = if powerup_state.selected_index == 0 {
+                num_options - 1
+            } else {
+                powerup_state.selected_index - 1
+            };
+        } else {
+            powerup_state.selected_index = (powerup_state.selected_index + 1) % num_options;
+        }
+
+        // Update button colors based on selection
+        for (button, mut bg_color) in button_query.iter_mut() {
+            if button.index == powerup_state.selected_index {
+                *bg_color = Color::srgb(0.3, 0.3, 0.5).into(); // Highlighted
+            } else {
+                *bg_color = Color::srgb(0.2, 0.2, 0.3).into(); // Normal
             }
         }
     }
