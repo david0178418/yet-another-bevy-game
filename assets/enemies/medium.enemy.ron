@@ -1,0 +1,8 @@
+(
+	color: (0.2, 0.8, 0.2),
+	base_health: 30.0,
+	speed: 50.0,
+	damage: 15.0,
+	size: (40.0, 40.0),
+	xp_value: 10,
+)

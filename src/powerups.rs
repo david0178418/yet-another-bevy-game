@@ -67,13 +67,15 @@ fn apply_powerup(
 	commands: &mut Commands,
 	player: &mut crate::player::Player,
 	blade_query: &mut Query<&mut crate::weapons::OrbitingBlade>,
+	weapon_defs: Option<&crate::weapons::WeaponDefinitions>,
+	weapon_data_assets: &Assets<crate::weapons::WeaponData>,
 ) {
 	match powerup_type {
 		PowerupType::OrbitingBlade => {
-			crate::weapons::spawn_orbiting_blade(commands, 1, blade_query);
+			crate::weapons::spawn_orbiting_blade(commands, 1, blade_query, weapon_defs, weapon_data_assets);
 		}
 		PowerupType::AutoShooter => {
-			crate::weapons::spawn_auto_shooter(commands);
+			crate::weapons::spawn_auto_shooter(commands, weapon_defs, weapon_data_assets);
 		}
 		PowerupType::SpeedBoost => {
 			player.speed += 50.0;
@@ -245,12 +247,14 @@ fn handle_powerup_selection(
     mut time: ResMut<Time<Virtual>>,
     gamepads: Query<&Gamepad>,
     mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
+    weapon_defs: Option<Res<crate::weapons::WeaponDefinitions>>,
+    weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
 ) {
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
                 if let Ok((_, mut player)) = player_query.get_single_mut() {
-                    apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query);
+                    apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query, weapon_defs.as_deref(), &weapon_data_assets);
                 }
                 cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
             }
@@ -273,7 +277,7 @@ fn handle_powerup_selection(
             for (button, _, _) in interaction_query.iter() {
                 if button.index == powerup_state.selected_index {
                     if let Ok((_, mut player)) = player_query.get_single_mut() {
-                        apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query);
+                        apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query, weapon_defs.as_deref(), &weapon_data_assets);
                     }
                     cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
                     break;

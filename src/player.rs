@@ -6,12 +6,18 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_player)
             .add_systems(Update, (
+                spawn_initial_weapon,
                 player_movement,
                 player_jump,
                 update_player_stats_display,
                 update_xp_bar,
             ));
     }
+}
+
+#[derive(Component)]
+struct NeedsInitialWeapon {
+	count: u32,
 }
 
 #[derive(Component)]
@@ -142,7 +148,6 @@ fn spawn_player_ui(commands: &mut Commands) {
 
 fn spawn_player(
 	mut commands: Commands,
-	mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
 	config: Res<crate::GameConfig>,
 ) {
 	const PLAYER_SIZE: Vec2 = Vec2::new(40.0, 40.0);
@@ -158,12 +163,32 @@ fn spawn_player(
 		Player::default(),
 		crate::physics::Velocity { x: 0.0, y: 0.0 },
 		crate::physics::Grounded(false),
+		NeedsInitialWeapon {
+			count: config.initial_weapon_level,
+		},
 	));
-
-	crate::weapons::spawn_orbiting_blade(&mut commands, config.initial_weapon_level, &mut blade_query);
 
 	spawn_platforms(&mut commands);
 	spawn_player_ui(&mut commands);
+}
+
+fn spawn_initial_weapon(
+	mut commands: Commands,
+	mut player_query: Query<(Entity, &NeedsInitialWeapon)>,
+	mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
+	weapon_defs: Option<Res<crate::weapons::WeaponDefinitions>>,
+	weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
+) {
+	for (entity, needs_weapon) in player_query.iter_mut() {
+		crate::weapons::spawn_orbiting_blade(
+			&mut commands,
+			needs_weapon.count,
+			&mut blade_query,
+			weapon_defs.as_deref(),
+			&weapon_data_assets,
+		);
+		commands.entity(entity).remove::<NeedsInitialWeapon>();
+	}
 }
 
 fn player_movement(

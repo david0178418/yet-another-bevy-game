@@ -1,15 +1,19 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, asset::AssetLoader};
 use rand::Rng;
+use serde::Deserialize;
 
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(EnemySpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
+        app.init_asset::<EnemyData>()
+            .init_asset_loader::<EnemyDataLoader>()
+            .insert_resource(EnemySpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
             .insert_resource(WaveTimer {
                 timer: Timer::from_seconds(30.0, TimerMode::Repeating),
                 wave: 1,
             })
+            .add_systems(Startup, load_enemy_definitions)
             .add_systems(Update, (
                 spawn_enemies,
                 move_enemies,
@@ -37,72 +41,68 @@ pub struct Enemy {
     pub xp_value: u32,
 }
 
-#[derive(Clone, Copy)]
-enum EnemyType {
-	Weak,
-	Medium,
-	Strong,
+#[derive(Asset, TypePath, Deserialize, Clone)]
+pub struct EnemyData {
+	pub color: (f32, f32, f32),
+	pub base_health: f32,
+	pub speed: f32,
+	pub damage: f32,
+	pub size: (f32, f32),
+	pub xp_value: u32,
 }
 
-impl EnemyType {
-	fn random() -> Self {
+#[derive(Default)]
+struct EnemyDataLoader;
+
+impl AssetLoader for EnemyDataLoader {
+	type Asset = EnemyData;
+	type Settings = ();
+	type Error = std::io::Error;
+
+	async fn load(
+		&self,
+		reader: &mut dyn bevy::asset::io::Reader,
+		_settings: &Self::Settings,
+		_load_context: &mut bevy::asset::LoadContext<'_>,
+	) -> Result<Self::Asset, Self::Error> {
+		let mut bytes = Vec::new();
+		reader.read_to_end(&mut bytes).await?;
+		let data = ron::de::from_bytes::<EnemyData>(&bytes)
+			.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+		Ok(data)
+	}
+
+	fn extensions(&self) -> &[&str] {
+		&["enemy.ron"]
+	}
+}
+
+#[derive(Resource)]
+pub struct EnemyDefinitions {
+	pub weak: Handle<EnemyData>,
+	pub medium: Handle<EnemyData>,
+	pub strong: Handle<EnemyData>,
+}
+
+impl EnemyDefinitions {
+	fn random_handle(&self) -> &Handle<EnemyData> {
 		let mut rng = rand::thread_rng();
 		match rng.gen_range(0..3) {
-			0 => Self::Weak,
-			1 => Self::Medium,
-			_ => Self::Strong,
-		}
-	}
-
-	fn color(&self) -> Color {
-		match self {
-			Self::Weak => Color::srgb(0.8, 0.2, 0.2),
-			Self::Medium => Color::srgb(0.2, 0.8, 0.2),
-			Self::Strong => Color::srgb(0.8, 0.8, 0.2),
-		}
-	}
-
-	fn base_health(&self) -> f32 {
-		match self {
-			Self::Weak => 15.0,
-			Self::Medium => 30.0,
-			Self::Strong => 50.0,
-		}
-	}
-
-	fn speed(&self) -> f32 {
-		match self {
-			Self::Weak => 80.0,
-			Self::Medium => 50.0,
-			Self::Strong => 30.0,
-		}
-	}
-
-	fn damage(&self) -> f32 {
-		match self {
-			Self::Weak => 10.0,
-			Self::Medium => 15.0,
-			Self::Strong => 25.0,
-		}
-	}
-
-	fn size(&self) -> Vec2 {
-		match self {
-			Self::Weak => Vec2::new(30.0, 30.0),
-			Self::Medium => Vec2::new(40.0, 40.0),
-			Self::Strong => Vec2::new(50.0, 50.0),
-		}
-	}
-
-	fn xp_value(&self) -> u32 {
-		match self {
-			Self::Weak => 5,
-			Self::Medium => 10,
-			Self::Strong => 20,
+			0 => &self.weak,
+			1 => &self.medium,
+			_ => &self.strong,
 		}
 	}
 }
 
+
+fn load_enemy_definitions(mut commands: Commands, asset_server: Res<AssetServer>) {
+	commands.insert_resource(EnemyDefinitions {
+		weak: asset_server.load("enemies/weak.enemy.ron"),
+		medium: asset_server.load("enemies/medium.enemy.ron"),
+		strong: asset_server.load("enemies/strong.enemy.ron"),
+	});
+}
 
 #[derive(Component)]
 struct HealthBar {
@@ -123,32 +123,40 @@ fn spawn_enemies(
     mut timer: ResMut<EnemySpawnTimer>,
     wave: Res<WaveTimer>,
     player_query: Query<&Transform, With<crate::player::Player>>,
+    enemy_defs: Option<Res<EnemyDefinitions>>,
+    enemy_data_assets: Res<Assets<EnemyData>>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
         let mut rng = rand::thread_rng();
 
-        if let Ok(player_transform) = player_query.get_single() {
+        if let (Ok(player_transform), Some(defs)) = (player_query.get_single(), enemy_defs) {
             // Spawn enemies off-screen
             let spawn_side = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
             let spawn_x = player_transform.translation.x + spawn_side * 700.0;
             let spawn_y = rng.gen_range(-200.0..100.0);
 
-            let enemy_type = EnemyType::random();
-            let size = enemy_type.size();
-            let scaled_health = enemy_type.base_health() * (1.0 + (wave.wave as f32 * 0.2));
+            let enemy_handle = defs.random_handle();
+
+            // Wait for asset to be loaded
+            let Some(enemy_data) = enemy_data_assets.get(enemy_handle) else {
+                return;
+            };
+
+            let size = Vec2::new(enemy_data.size.0, enemy_data.size.1);
+            let scaled_health = enemy_data.base_health * (1.0 + (wave.wave as f32 * 0.2));
 
             let enemy_entity = commands.spawn((
                 Sprite {
-                    color: enemy_type.color(),
+                    color: Color::srgb(enemy_data.color.0, enemy_data.color.1, enemy_data.color.2),
                     custom_size: Some(size),
                     ..default()
                 },
                 Transform::from_xyz(spawn_x, spawn_y, 0.0),
                 Enemy {
                     health: scaled_health,
-                    speed: enemy_type.speed(),
-                    damage: enemy_type.damage(),
-                    xp_value: enemy_type.xp_value(),
+                    speed: enemy_data.speed,
+                    damage: enemy_data.damage,
+                    xp_value: enemy_data.xp_value,
                 },
                 crate::physics::Velocity { x: 0.0, y: 0.0 },
                 crate::physics::Grounded(false),

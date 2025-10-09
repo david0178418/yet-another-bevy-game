@@ -1,30 +1,90 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, asset::AssetLoader};
 use std::f32::consts::PI;
+use serde::Deserialize;
 
 pub struct WeaponsPlugin;
 
-const BLADE_RADIUS: f32 = 80.0;
-const BLADE_SPEED: f32 = 3.0;
-const BLADE_DAMAGE: f32 = 200.0;
-const BLADE_SIZE: Vec2 = Vec2::new(20.0, 10.0);
-const BLADE_COLOR: Color = Color::srgb(0.8, 0.8, 0.9);
+// Data-driven weapon definitions
+#[derive(Deserialize, Clone)]
+pub struct OrbitingBladeData {
+	pub radius: f32,
+	pub speed: f32,
+	pub damage: f32,
+	pub size: (f32, f32),
+	pub color: (f32, f32, f32),
+}
 
-const SHOOTER_COOLDOWN: f32 = 1.5;
-const SHOOTER_DAMAGE: f32 = 250.0;
-const SHOOTER_PROJECTILE_SPEED: f32 = 300.0;
+#[derive(Deserialize, Clone)]
+pub struct AutoShooterData {
+	pub cooldown: f32,
+	pub damage: f32,
+	pub projectile_speed: f32,
+	pub projectile_size: (f32, f32),
+	pub projectile_color: (f32, f32, f32),
+	pub projectile_lifetime: f32,
+}
 
-const PROJECTILE_SIZE: Vec2 = Vec2::new(15.0, 8.0);
-const PROJECTILE_COLOR: Color = Color::srgb(0.9, 0.9, 0.3);
-const PROJECTILE_LIFETIME: f32 = 3.0;
+#[derive(Deserialize, Clone)]
+pub enum WeaponTypeData {
+	OrbitingBlade(OrbitingBladeData),
+	AutoShooter(AutoShooterData),
+}
+
+#[derive(Asset, TypePath, Deserialize, Clone)]
+pub struct WeaponData {
+	pub weapon_type: WeaponTypeData,
+}
+
+#[derive(Default)]
+struct WeaponDataLoader;
+
+impl AssetLoader for WeaponDataLoader {
+	type Asset = WeaponData;
+	type Settings = ();
+	type Error = std::io::Error;
+
+	async fn load(
+		&self,
+		reader: &mut dyn bevy::asset::io::Reader,
+		_settings: &Self::Settings,
+		_load_context: &mut bevy::asset::LoadContext<'_>,
+	) -> Result<Self::Asset, Self::Error> {
+		let mut bytes = Vec::new();
+		reader.read_to_end(&mut bytes).await?;
+		let data = ron::de::from_bytes::<WeaponData>(&bytes)
+			.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+		Ok(data)
+	}
+
+	fn extensions(&self) -> &[&str] {
+		&["weapon.ron"]
+	}
+}
+
+#[derive(Resource)]
+pub struct WeaponDefinitions {
+	pub orbiting_blade: Handle<WeaponData>,
+	pub auto_shooter: Handle<WeaponData>,
+}
 
 impl Plugin for WeaponsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (
-            update_orbiting_blade,
-            update_auto_shooter,
-            move_projectiles,
-        ));
+        app.init_asset::<WeaponData>()
+            .init_asset_loader::<WeaponDataLoader>()
+            .add_systems(Startup, load_weapon_definitions)
+            .add_systems(Update, (
+                update_orbiting_blade,
+                update_auto_shooter,
+                move_projectiles,
+            ));
     }
+}
+
+fn load_weapon_definitions(mut commands: Commands, asset_server: Res<AssetServer>) {
+	commands.insert_resource(WeaponDefinitions {
+		orbiting_blade: asset_server.load("weapons/orbiting_blade.weapon.ron"),
+		auto_shooter: asset_server.load("weapons/auto_shooter.weapon.ron"),
+	});
 }
 
 #[derive(Component)]
@@ -52,7 +112,13 @@ pub fn spawn_orbiting_blade(
     commands: &mut Commands,
     count: u32,
     blade_query: &mut Query<&mut OrbitingBlade>,
+    weapon_defs: Option<&WeaponDefinitions>,
+    weapon_data_assets: &Assets<WeaponData>,
 ) {
+    let Some(defs) = weapon_defs else { return };
+    let Some(weapon_data) = weapon_data_assets.get(&defs.orbiting_blade) else { return };
+    let WeaponTypeData::OrbitingBlade(ref blade_data) = weapon_data.weapon_type else { return };
+
     let existing_count = blade_query.iter().count();
     let total_count = existing_count + count as usize;
 
@@ -66,26 +132,34 @@ pub fn spawn_orbiting_blade(
         let blade_index = existing_count + i as usize;
         commands.spawn((
             Sprite {
-                color: BLADE_COLOR,
-                custom_size: Some(BLADE_SIZE),
+                color: Color::srgb(blade_data.color.0, blade_data.color.1, blade_data.color.2),
+                custom_size: Some(Vec2::new(blade_data.size.0, blade_data.size.1)),
                 ..default()
             },
             Transform::from_xyz(0.0, 0.0, 1.0),
             OrbitingBlade {
                 angle: (blade_index as f32 / total_count as f32) * 2.0 * PI,
-                radius: BLADE_RADIUS,
-                speed: BLADE_SPEED,
-                damage: BLADE_DAMAGE,
+                radius: blade_data.radius,
+                speed: blade_data.speed,
+                damage: blade_data.damage,
             },
         ));
     }
 }
 
-pub fn spawn_auto_shooter(commands: &mut Commands) {
+pub fn spawn_auto_shooter(
+    commands: &mut Commands,
+    weapon_defs: Option<&WeaponDefinitions>,
+    weapon_data_assets: &Assets<WeaponData>,
+) {
+    let Some(defs) = weapon_defs else { return };
+    let Some(weapon_data) = weapon_data_assets.get(&defs.auto_shooter) else { return };
+    let WeaponTypeData::AutoShooter(ref shooter_data) = weapon_data.weapon_type else { return };
+
     commands.spawn(AutoShooter {
-        cooldown: Timer::from_seconds(SHOOTER_COOLDOWN, TimerMode::Repeating),
-        damage: SHOOTER_DAMAGE,
-        projectile_speed: SHOOTER_PROJECTILE_SPEED,
+        cooldown: Timer::from_seconds(shooter_data.cooldown, TimerMode::Repeating),
+        damage: shooter_data.damage,
+        projectile_speed: shooter_data.projectile_speed,
     });
 }
 
@@ -111,7 +185,13 @@ fn update_auto_shooter(
     player_query: Query<&Transform, With<crate::player::Player>>,
     enemy_query: Query<&Transform, With<crate::enemy::Enemy>>,
     time: Res<Time<Virtual>>,
+    weapon_defs: Option<Res<WeaponDefinitions>>,
+    weapon_data_assets: Res<Assets<WeaponData>>,
 ) {
+    let Some(defs) = weapon_defs else { return };
+    let Some(weapon_data) = weapon_data_assets.get(&defs.auto_shooter) else { return };
+    let WeaponTypeData::AutoShooter(ref shooter_data) = weapon_data.weapon_type else { return };
+
     if let Ok(player_transform) = player_query.get_single() {
         for mut shooter in shooter_query.iter_mut() {
             if shooter.cooldown.tick(time.delta()).just_finished() {
@@ -130,8 +210,8 @@ fn update_auto_shooter(
                 // Spawn projectile
                 commands.spawn((
                     Sprite {
-                        color: PROJECTILE_COLOR,
-                        custom_size: Some(PROJECTILE_SIZE),
+                        color: Color::srgb(shooter_data.projectile_color.0, shooter_data.projectile_color.1, shooter_data.projectile_color.2),
+                        custom_size: Some(Vec2::new(shooter_data.projectile_size.0, shooter_data.projectile_size.1)),
                         ..default()
                     },
                     Transform::from_xyz(
@@ -145,7 +225,7 @@ fn update_auto_shooter(
                     },
                     Projectile {
                         damage: shooter.damage,
-                        lifetime: Timer::from_seconds(PROJECTILE_LIFETIME, TimerMode::Once),
+                        lifetime: Timer::from_seconds(shooter_data.projectile_lifetime, TimerMode::Once),
                     },
                 ));
             }
