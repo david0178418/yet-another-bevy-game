@@ -47,176 +47,123 @@ struct XPBarForeground;
 #[derive(Component)]
 struct XPText;
 
+const PLATFORM_COLOR: Color = Color::srgb(0.3, 0.3, 0.3);
+
+fn spawn_platform(commands: &mut Commands, position: Vec3, size: Vec2) {
+	commands.spawn((
+		Sprite {
+			color: PLATFORM_COLOR,
+			custom_size: Some(size),
+			..default()
+		},
+		Transform::from_translation(position),
+		crate::physics::Ground,
+	));
+}
+
+fn spawn_platforms(commands: &mut Commands) {
+	const GROUND_SIZE: Vec2 = Vec2::new(2000.0, 40.0);
+	const STAIR_SIZE: Vec2 = Vec2::new(150.0, 20.0);
+	const TOP_PLATFORM_SIZE: Vec2 = Vec2::new(200.0, 20.0);
+
+	const PLATFORMS: [(Vec3, Vec2); 8] = [
+		(Vec3::new(0.0, -300.0, 0.0), GROUND_SIZE),
+		(Vec3::new(-200.0, -240.0, 0.0), STAIR_SIZE),
+		(Vec3::new(-400.0, -180.0, 0.0), STAIR_SIZE),
+		(Vec3::new(-200.0, -120.0, 0.0), STAIR_SIZE),
+		(Vec3::new(200.0, -240.0, 0.0), STAIR_SIZE),
+		(Vec3::new(400.0, -180.0, 0.0), STAIR_SIZE),
+		(Vec3::new(200.0, -120.0, 0.0), STAIR_SIZE),
+		(Vec3::new(0.0, -60.0, 0.0), TOP_PLATFORM_SIZE),
+	];
+
+	PLATFORMS.iter().for_each(|(pos, size)| spawn_platform(commands, *pos, *size));
+}
+
+fn spawn_player_ui(commands: &mut Commands) {
+	commands.spawn((
+		Text::new("Health: 100/100 | Level: 1"),
+		Node {
+			position_type: PositionType::Absolute,
+			top: Val::Px(10.0),
+			left: Val::Px(10.0),
+			..default()
+		},
+		TextColor(Color::WHITE),
+		TextFont {
+			font_size: 20.0,
+			..default()
+		},
+		PlayerStatsText,
+	));
+
+	commands.spawn((
+		Node {
+			position_type: PositionType::Absolute,
+			top: Val::Px(40.0),
+			left: Val::Px(10.0),
+			width: Val::Px(300.0),
+			height: Val::Px(20.0),
+			..default()
+		},
+		BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+		XPBarBackground,
+	));
+
+	commands.spawn((
+		Node {
+			position_type: PositionType::Absolute,
+			top: Val::Px(40.0),
+			left: Val::Px(10.0),
+			width: Val::Px(0.0),
+			height: Val::Px(20.0),
+			..default()
+		},
+		BackgroundColor(Color::srgb(0.2, 0.6, 0.9)),
+		XPBarForeground,
+	));
+
+	commands.spawn((
+		Text::new("XP: 0/100"),
+		Node {
+			position_type: PositionType::Absolute,
+			top: Val::Px(42.0),
+			left: Val::Px(15.0),
+			..default()
+		},
+		TextColor(Color::WHITE),
+		TextFont {
+			font_size: 16.0,
+			..default()
+		},
+		XPText,
+	));
+}
+
 fn spawn_player(
 	mut commands: Commands,
 	mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
 	config: Res<crate::GameConfig>,
 ) {
-    // Spawn player (blue block)
-    let player_entity = commands.spawn((
-        Sprite {
-            color: Color::srgb(0.2, 0.4, 0.9),
-            custom_size: Some(Vec2::new(40.0, 40.0)),
-            ..default()
-        },
-        Transform::from_xyz(0.0, -200.0, 0.0),
-        Player::default(),
-        crate::physics::Velocity { x: 0.0, y: 0.0 },
-        crate::physics::Grounded(false),
-    )).id();
+	const PLAYER_SIZE: Vec2 = Vec2::new(40.0, 40.0);
+	const PLAYER_SPAWN: Vec3 = Vec3::new(0.0, -200.0, 0.0);
 
-    // Give player a starter weapon (orbiting blade)
-    crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, config.initial_weapon_level, &mut blade_query);
+	commands.spawn((
+		Sprite {
+			color: Color::srgb(0.2, 0.4, 0.9),
+			custom_size: Some(PLAYER_SIZE),
+			..default()
+		},
+		Transform::from_translation(PLAYER_SPAWN),
+		Player::default(),
+		crate::physics::Velocity { x: 0.0, y: 0.0 },
+		crate::physics::Grounded(false),
+	));
 
-    // Spawn ground platform
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(2000.0, 40.0)),
-            ..default()
-        },
-        Transform::from_xyz(0.0, -300.0, 0.0),
-        crate::physics::Ground,
-    ));
+	crate::weapons::spawn_orbiting_blade(&mut commands, config.initial_weapon_level, &mut blade_query);
 
-    // Add stair-step platforms for traversal
-    // Player spawns at Y=-200, ground at Y=-300
-    // Jump force is 400, so max jump height is roughly 80-100 units
-
-    // Left side stairs going up
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(150.0, 20.0)),
-            ..default()
-        },
-        Transform::from_xyz(-200.0, -240.0, 0.0),
-        crate::physics::Ground,
-    ));
-
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(150.0, 20.0)),
-            ..default()
-        },
-        Transform::from_xyz(-400.0, -180.0, 0.0),
-        crate::physics::Ground,
-    ));
-
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(150.0, 20.0)),
-            ..default()
-        },
-        Transform::from_xyz(-200.0, -120.0, 0.0),
-        crate::physics::Ground,
-    ));
-
-    // Right side stairs going up
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(150.0, 20.0)),
-            ..default()
-        },
-        Transform::from_xyz(200.0, -240.0, 0.0),
-        crate::physics::Ground,
-    ));
-
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(150.0, 20.0)),
-            ..default()
-        },
-        Transform::from_xyz(400.0, -180.0, 0.0),
-        crate::physics::Ground,
-    ));
-
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(150.0, 20.0)),
-            ..default()
-        },
-        Transform::from_xyz(200.0, -120.0, 0.0),
-        crate::physics::Ground,
-    ));
-
-    // Top platform
-    commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.3, 0.3),
-            custom_size: Some(Vec2::new(200.0, 20.0)),
-            ..default()
-        },
-        Transform::from_xyz(0.0, -60.0, 0.0),
-        crate::physics::Ground,
-    ));
-
-    // Player stats UI
-    commands.spawn((
-        Text::new("Health: 100/100 | Level: 1"),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            left: Val::Px(10.0),
-            ..default()
-        },
-        TextColor(Color::WHITE),
-        TextFont {
-            font_size: 20.0,
-            ..default()
-        },
-        PlayerStatsText,
-    ));
-
-    // XP bar background
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(40.0),
-            left: Val::Px(10.0),
-            width: Val::Px(300.0),
-            height: Val::Px(20.0),
-            ..default()
-        },
-        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-        XPBarBackground,
-    ));
-
-    // XP bar foreground
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(40.0),
-            left: Val::Px(10.0),
-            width: Val::Px(0.0),
-            height: Val::Px(20.0),
-            ..default()
-        },
-        BackgroundColor(Color::srgb(0.2, 0.6, 0.9)),
-        XPBarForeground,
-    ));
-
-    // XP text
-    commands.spawn((
-        Text::new("XP: 0/100"),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(42.0),
-            left: Val::Px(15.0),
-            ..default()
-        },
-        TextColor(Color::WHITE),
-        TextFont {
-            font_size: 16.0,
-            ..default()
-        },
-        XPText,
-    ));
+	spawn_platforms(&mut commands);
+	spawn_player_ui(&mut commands);
 }
 
 fn player_movement(

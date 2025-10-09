@@ -37,6 +37,72 @@ pub struct Enemy {
     pub xp_value: u32,
 }
 
+#[derive(Clone, Copy)]
+enum EnemyType {
+	Weak,
+	Medium,
+	Strong,
+}
+
+impl EnemyType {
+	fn random() -> Self {
+		let mut rng = rand::thread_rng();
+		match rng.gen_range(0..3) {
+			0 => Self::Weak,
+			1 => Self::Medium,
+			_ => Self::Strong,
+		}
+	}
+
+	fn color(&self) -> Color {
+		match self {
+			Self::Weak => Color::srgb(0.8, 0.2, 0.2),
+			Self::Medium => Color::srgb(0.2, 0.8, 0.2),
+			Self::Strong => Color::srgb(0.8, 0.8, 0.2),
+		}
+	}
+
+	fn base_health(&self) -> f32 {
+		match self {
+			Self::Weak => 15.0,
+			Self::Medium => 30.0,
+			Self::Strong => 50.0,
+		}
+	}
+
+	fn speed(&self) -> f32 {
+		match self {
+			Self::Weak => 80.0,
+			Self::Medium => 50.0,
+			Self::Strong => 30.0,
+		}
+	}
+
+	fn damage(&self) -> f32 {
+		match self {
+			Self::Weak => 10.0,
+			Self::Medium => 15.0,
+			Self::Strong => 25.0,
+		}
+	}
+
+	fn size(&self) -> Vec2 {
+		match self {
+			Self::Weak => Vec2::new(30.0, 30.0),
+			Self::Medium => Vec2::new(40.0, 40.0),
+			Self::Strong => Vec2::new(50.0, 50.0),
+		}
+	}
+
+	fn xp_value(&self) -> u32 {
+		match self {
+			Self::Weak => 5,
+			Self::Medium => 10,
+			Self::Strong => 20,
+		}
+	}
+}
+
 
 #[derive(Component)]
 struct HealthBar {
@@ -67,28 +133,22 @@ fn spawn_enemies(
             let spawn_x = player_transform.translation.x + spawn_side * 700.0;
             let spawn_y = rng.gen_range(-200.0..100.0);
 
-            let enemy_type = rng.gen_range(0..3);
-
-            let (color, health, speed, damage, size, xp) = match enemy_type {
-                0 => (Color::srgb(0.8, 0.2, 0.2), 15.0, 80.0, 10.0, Vec2::new(30.0, 30.0), 5),  // Red - weak, fast
-                1 => (Color::srgb(0.2, 0.8, 0.2), 30.0, 50.0, 15.0, Vec2::new(40.0, 40.0), 10), // Green - medium
-                _ => (Color::srgb(0.8, 0.8, 0.2), 50.0, 30.0, 25.0, Vec2::new(50.0, 50.0), 20), // Yellow - strong, slow
-            };
-
-            let scaled_health = health * (1.0 + (wave.wave as f32 * 0.2));
+            let enemy_type = EnemyType::random();
+            let size = enemy_type.size();
+            let scaled_health = enemy_type.base_health() * (1.0 + (wave.wave as f32 * 0.2));
 
             let enemy_entity = commands.spawn((
                 Sprite {
-                    color,
+                    color: enemy_type.color(),
                     custom_size: Some(size),
                     ..default()
                 },
                 Transform::from_xyz(spawn_x, spawn_y, 0.0),
                 Enemy {
                     health: scaled_health,
-                    speed,
-                    damage,
-                    xp_value: xp,
+                    speed: enemy_type.speed(),
+                    damage: enemy_type.damage(),
+                    xp_value: enemy_type.xp_value(),
                 },
                 crate::physics::Velocity { x: 0.0, y: 0.0 },
                 crate::physics::Grounded(false),

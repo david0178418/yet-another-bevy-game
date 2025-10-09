@@ -3,6 +3,20 @@ use std::f32::consts::PI;
 
 pub struct WeaponsPlugin;
 
+const BLADE_RADIUS: f32 = 80.0;
+const BLADE_SPEED: f32 = 3.0;
+const BLADE_DAMAGE: f32 = 200.0;
+const BLADE_SIZE: Vec2 = Vec2::new(20.0, 10.0);
+const BLADE_COLOR: Color = Color::srgb(0.8, 0.8, 0.9);
+
+const SHOOTER_COOLDOWN: f32 = 1.5;
+const SHOOTER_DAMAGE: f32 = 250.0;
+const SHOOTER_PROJECTILE_SPEED: f32 = 300.0;
+
+const PROJECTILE_SIZE: Vec2 = Vec2::new(15.0, 8.0);
+const PROJECTILE_COLOR: Color = Color::srgb(0.9, 0.9, 0.3);
+const PROJECTILE_LIFETIME: f32 = 3.0;
+
 impl Plugin for WeaponsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (
@@ -36,7 +50,6 @@ pub struct Projectile {
 
 pub fn spawn_orbiting_blade(
     commands: &mut Commands,
-    _player_entity: Entity,
     count: u32,
     blade_query: &mut Query<&mut OrbitingBlade>,
 ) {
@@ -53,26 +66,26 @@ pub fn spawn_orbiting_blade(
         let blade_index = existing_count + i as usize;
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.8, 0.8, 0.9),
-                custom_size: Some(Vec2::new(20.0, 10.0)),
+                color: BLADE_COLOR,
+                custom_size: Some(BLADE_SIZE),
                 ..default()
             },
             Transform::from_xyz(0.0, 0.0, 1.0),
             OrbitingBlade {
                 angle: (blade_index as f32 / total_count as f32) * 2.0 * PI,
-                radius: 80.0,
-                speed: 3.0,
-                damage: 200.0,
+                radius: BLADE_RADIUS,
+                speed: BLADE_SPEED,
+                damage: BLADE_DAMAGE,
             },
         ));
     }
 }
 
-pub fn spawn_auto_shooter(commands: &mut Commands, _player_entity: Entity) {
+pub fn spawn_auto_shooter(commands: &mut Commands) {
     commands.spawn(AutoShooter {
-        cooldown: Timer::from_seconds(1.5, TimerMode::Repeating),
-        damage: 250.0,
-        projectile_speed: 300.0,
+        cooldown: Timer::from_seconds(SHOOTER_COOLDOWN, TimerMode::Repeating),
+        damage: SHOOTER_DAMAGE,
+        projectile_speed: SHOOTER_PROJECTILE_SPEED,
     });
 }
 
@@ -117,8 +130,8 @@ fn update_auto_shooter(
                 // Spawn projectile
                 commands.spawn((
                     Sprite {
-                        color: Color::srgb(0.9, 0.9, 0.3),
-                        custom_size: Some(Vec2::new(15.0, 8.0)),
+                        color: PROJECTILE_COLOR,
+                        custom_size: Some(PROJECTILE_SIZE),
                         ..default()
                     },
                     Transform::from_xyz(
@@ -132,7 +145,7 @@ fn update_auto_shooter(
                     },
                     Projectile {
                         damage: shooter.damage,
-                        lifetime: Timer::from_seconds(3.0, TimerMode::Once),
+                        lifetime: Timer::from_seconds(PROJECTILE_LIFETIME, TimerMode::Once),
                     },
                 ));
             }

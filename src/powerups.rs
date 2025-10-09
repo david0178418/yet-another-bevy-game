@@ -62,6 +62,46 @@ struct PowerupButton {
     index: usize,
 }
 
+fn apply_powerup(
+	powerup_type: &PowerupType,
+	commands: &mut Commands,
+	player: &mut crate::player::Player,
+	blade_query: &mut Query<&mut crate::weapons::OrbitingBlade>,
+) {
+	match powerup_type {
+		PowerupType::OrbitingBlade => {
+			crate::weapons::spawn_orbiting_blade(commands, 1, blade_query);
+		}
+		PowerupType::AutoShooter => {
+			crate::weapons::spawn_auto_shooter(commands);
+		}
+		PowerupType::SpeedBoost => {
+			player.speed += 50.0;
+		}
+		PowerupType::JumpBoost => {
+			player.jump_force += 100.0;
+		}
+		PowerupType::MaxHealthIncrease => {
+			player.max_health += 20.0;
+			player.health = player.max_health;
+		}
+	}
+}
+
+fn cleanup_powerup_ui(
+	commands: &mut Commands,
+	ui_query: &Query<Entity, With<PowerupUIContainer>>,
+	powerup_state: &mut PowerupState,
+	time: &mut Time<Virtual>,
+) {
+	for entity in ui_query.iter() {
+		commands.entity(entity).despawn_recursive();
+	}
+	powerup_state.showing = false;
+	powerup_state.options.clear();
+	time.unpause();
+}
+
 fn handle_level_up(
     mut commands: Commands,
     mut level_up_events: EventReader<crate::experience::LevelUpEvent>,
@@ -209,38 +249,10 @@ fn handle_powerup_selection(
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                // Apply powerup
-                if let Ok((player_entity, mut player)) = player_query.get_single_mut() {
-                    match button.powerup_type {
-                        PowerupType::OrbitingBlade => {
-                            crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1, &mut blade_query);
-                        }
-                        PowerupType::AutoShooter => {
-                            crate::weapons::spawn_auto_shooter(&mut commands, player_entity);
-                        }
-                        PowerupType::SpeedBoost => {
-                            player.speed += 50.0;
-                        }
-                        PowerupType::JumpBoost => {
-                            player.jump_force += 100.0;
-                        }
-                        PowerupType::MaxHealthIncrease => {
-                            player.max_health += 20.0;
-                            player.health = player.max_health; // Full heal
-                        }
-                    }
+                if let Ok((_, mut player)) = player_query.get_single_mut() {
+                    apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query);
                 }
-
-                // Remove UI
-                for entity in ui_query.iter() {
-                    commands.entity(entity).despawn_recursive();
-                }
-
-                powerup_state.showing = false;
-                powerup_state.options.clear();
-
-                // Resume the game
-                time.unpause();
+                cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
             }
             Interaction::Hovered => {
                 *bg_color = Color::srgb(0.3, 0.3, 0.4).into();
@@ -258,41 +270,12 @@ fn handle_powerup_selection(
 
     for gamepad in gamepads.iter() {
         if gamepad.just_pressed(GamepadButton::South) {
-            // Find the button at the selected index
             for (button, _, _) in interaction_query.iter() {
                 if button.index == powerup_state.selected_index {
-                    // Apply powerup
-                    if let Ok((player_entity, mut player)) = player_query.get_single_mut() {
-                        match button.powerup_type {
-                            PowerupType::OrbitingBlade => {
-                                crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1, &mut blade_query);
-                            }
-                            PowerupType::AutoShooter => {
-                                crate::weapons::spawn_auto_shooter(&mut commands, player_entity);
-                            }
-                            PowerupType::SpeedBoost => {
-                                player.speed += 50.0;
-                            }
-                            PowerupType::JumpBoost => {
-                                player.jump_force += 100.0;
-                            }
-                            PowerupType::MaxHealthIncrease => {
-                                player.max_health += 20.0;
-                                player.health = player.max_health;
-                            }
-                        }
+                    if let Ok((_, mut player)) = player_query.get_single_mut() {
+                        apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query);
                     }
-
-                    // Remove UI
-                    for entity in ui_query.iter() {
-                        commands.entity(entity).despawn_recursive();
-                    }
-
-                    powerup_state.showing = false;
-                    powerup_state.options.clear();
-
-                    // Resume the game
-                    time.unpause();
+                    cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
                     break;
                 }
             }
