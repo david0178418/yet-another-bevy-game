@@ -8,7 +8,7 @@ impl Plugin for ExperiencePlugin {
             current_xp: 0,
             xp_to_next_level: 100,
         })
-        .add_event::<LevelUpEvent>()
+        .add_message::<LevelUpEvent>()
         .add_systems(Update, (
             move_xp_orbs_to_player,
             collect_experience,
@@ -23,7 +23,7 @@ pub struct PlayerExperience {
     pub xp_to_next_level: u32,
 }
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct LevelUpEvent;
 
 #[derive(Component)]
@@ -36,7 +36,7 @@ fn move_xp_orbs_to_player(
     player_query: Query<&Transform, With<crate::player::Player>>,
     time: Res<Time<Virtual>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
+    if let Ok(player_transform) = player_query.single() {
         for mut orb_transform in orb_query.iter_mut() {
             let distance = player_transform.translation.distance(orb_transform.translation);
 
@@ -55,7 +55,7 @@ fn collect_experience(
     orb_query: Query<(Entity, &Transform, &ExperienceOrb)>,
     player_query: Query<&Transform, With<crate::player::Player>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
+    if let Ok(player_transform) = player_query.single() {
         for (entity, orb_transform, orb) in orb_query.iter() {
             let distance = player_transform.translation.distance(orb_transform.translation);
 
@@ -70,15 +70,15 @@ fn collect_experience(
 fn check_level_up(
     mut player_xp: ResMut<PlayerExperience>,
     mut player_query: Query<&mut crate::player::Player>,
-    mut level_up_events: EventWriter<LevelUpEvent>,
+    mut level_up_events: MessageWriter<LevelUpEvent>,
 ) {
     if player_xp.current_xp >= player_xp.xp_to_next_level {
         player_xp.current_xp -= player_xp.xp_to_next_level;
         player_xp.xp_to_next_level = (player_xp.xp_to_next_level as f32 * 1.5) as u32;
 
-        if let Ok(mut player) = player_query.get_single_mut() {
+        if let Ok(mut player) = player_query.single_mut() {
             player.level += 1;
-            level_up_events.send(LevelUpEvent);
+            level_up_events.write(LevelUpEvent);
         }
     }
 }

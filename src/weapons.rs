@@ -201,7 +201,7 @@ fn update_orbiting_blade(
     player_query: Query<&Transform, (With<crate::player::Player>, Without<OrbitingBlade>)>,
     time: Res<Time<Virtual>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
+    if let Ok(player_transform) = player_query.single() {
         for (mut blade_transform, mut blade) in blade_query.iter_mut() {
             blade.angle += blade.speed * time.delta_secs();
 
@@ -220,7 +220,7 @@ fn update_auto_shooter(
     time: Res<Time<Virtual>>,
 ) {
 
-    if let Ok(player_transform) = player_query.get_single() {
+    if let Ok(player_transform) = player_query.single() {
         for (mut shooter, config) in shooter_query.iter_mut() {
             if shooter.cooldown.tick(time.delta()).just_finished() {
                 // Find nearest enemy

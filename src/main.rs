@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::camera::{ScalingMode, Viewport}, ui::UiScale, window::WindowResized, asset::AssetLoader};
+use bevy::{prelude::*, ui::UiScale, window::{WindowResized, WindowResolution}, asset::AssetLoader, camera::{Viewport, ScalingMode}};
 use serde::Deserialize;
 
 mod player;
@@ -115,7 +115,7 @@ fn main() {
 		.add_plugins(DefaultPlugins.set(WindowPlugin {
 			primary_window: Some(Window {
 				title: "Vampire Survivors Platformer".to_string(),
-				resolution: (1280.0, 720.0).into(),
+				resolution: WindowResolution::new(1280, 720),
 				resizable: true,
 				..default()
 			}),
@@ -144,26 +144,27 @@ fn load_game_config(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 fn setup_camera(mut commands: Commands, windows: Query<&Window>, mut ui_scale: ResMut<UiScale>) {
-	let window = windows.single();
-	let viewport = calculate_viewport(window.width(), window.height());
-	let scale = calculate_ui_scale(window.width(), window.height());
-	ui_scale.0 = scale;
+	if let Ok(window) = windows.single() {
+		let viewport = calculate_viewport(window.width(), window.height());
+		let scale = calculate_ui_scale(window.width(), window.height());
+		ui_scale.0 = scale;
 
-	commands.spawn((
-		Camera2d,
-		Camera {
-			viewport: Some(viewport),
-			..default()
-		},
-		OrthographicProjection {
-			scaling_mode: ScalingMode::Fixed {
-				width: GAME_WIDTH,
-				height: GAME_HEIGHT,
+		commands.spawn((
+			Camera2d,
+			Camera {
+				viewport: Some(viewport),
+				..default()
 			},
-			..OrthographicProjection::default_2d()
-		},
-		GameCamera,
-	));
+			Projection::from(OrthographicProjection {
+				scaling_mode: ScalingMode::Fixed {
+					width: GAME_WIDTH,
+					height: GAME_HEIGHT,
+				},
+				..OrthographicProjection::default_2d()
+			}),
+			GameCamera,
+		));
+	}
 }
 
 fn calculate_viewport(window_width: f32, window_height: f32) -> Viewport {
@@ -200,12 +201,12 @@ fn calculate_ui_scale(window_width: f32, window_height: f32) -> f32 {
 }
 
 fn update_camera_viewport(
-	mut resize_events: EventReader<WindowResized>,
+	mut resize_events: MessageReader<WindowResized>,
 	mut camera_query: Query<&mut Camera, With<GameCamera>>,
 	mut ui_scale: ResMut<UiScale>,
 ) {
 	for event in resize_events.read() {
-		if let Ok(mut camera) = camera_query.get_single_mut() {
+		if let Ok(mut camera) = camera_query.single_mut() {
 			camera.viewport = Some(calculate_viewport(event.width, event.height));
 			ui_scale.0 = calculate_ui_scale(event.width, event.height);
 		}

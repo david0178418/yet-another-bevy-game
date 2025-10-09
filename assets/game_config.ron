@@ -1,0 +1,28 @@
+(
+	initial_weapon: (
+		weapon_id: "orbiting_blade",
+		level: 1,
+	),
+	powerup_pool: [
+		Weapon("orbiting_blade"),
+		Weapon("auto_shooter"),
+		StatBoost((
+			stat: Speed,
+			value: 50.0,
+			name: "Speed Boost",
+			description: "Increases movement speed",
+		)),
+		StatBoost((
+			stat: JumpForce,
+			value: 100.0,
+			name: "Jump Boost",
+			description: "Increases jump height",
+		)),
+		StatBoost((
+			stat: MaxHealth,
+			value: 20.0,
+			name: "Max Health +20",
+			description: "Increases maximum health and heals",
+		)),
+	],
+)

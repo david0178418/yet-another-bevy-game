@@ -65,7 +65,7 @@ fn enemy_damage_player(
     enemy_query: Query<(&crate::enemy::Enemy, &Transform, &Sprite)>,
     time: Res<Time<Virtual>>,
 ) {
-    if let Ok((mut player, player_transform, player_sprite)) = player_query.get_single_mut() {
+    if let Ok((mut player, player_transform, player_sprite)) = player_query.single_mut() {
         let player_size = player_sprite.custom_size.unwrap_or(Vec2::ONE);
 
         for (enemy, enemy_transform, enemy_sprite) in enemy_query.iter() {

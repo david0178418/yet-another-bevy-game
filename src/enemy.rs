@@ -141,7 +141,7 @@ fn spawn_enemies(
     if timer.0.tick(time.delta()).just_finished() {
         let mut rng = rand::thread_rng();
 
-        if let (Ok(player_transform), Some(registry)) = (player_query.get_single(), enemy_registry) {
+        if let (Ok(player_transform), Some(registry)) = (player_query.single(), enemy_registry) {
             // Spawn enemies off-screen
             let spawn_side = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
             let spawn_x = player_transform.translation.x + spawn_side * 700.0;
@@ -206,7 +206,7 @@ fn move_enemies(
     mut enemy_query: Query<(&Transform, &mut crate::physics::Velocity, &Enemy), Without<crate::player::Player>>,
     player_query: Query<&Transform, With<crate::player::Player>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
+    if let Ok(player_transform) = player_query.single() {
         for (enemy_transform, mut velocity, enemy) in enemy_query.iter_mut() {
             let direction = (player_transform.translation.x - enemy_transform.translation.x).signum();
             velocity.x = direction * enemy.speed;

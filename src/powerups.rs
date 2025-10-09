@@ -73,7 +73,7 @@ fn cleanup_powerup_ui(
 	time: &mut Time<Virtual>,
 ) {
 	for entity in ui_query.iter() {
-		commands.entity(entity).despawn_recursive();
+		commands.entity(entity).despawn();
 	}
 	powerup_state.showing = false;
 	powerup_state.options.clear();
@@ -82,7 +82,7 @@ fn cleanup_powerup_ui(
 
 fn handle_level_up(
     mut commands: Commands,
-    mut level_up_events: EventReader<crate::experience::LevelUpEvent>,
+    mut level_up_events: MessageReader<crate::experience::LevelUpEvent>,
     mut powerup_state: ResMut<PowerupState>,
     mut time: ResMut<Time<Virtual>>,
     game_config: Option<Res<crate::GameConfig>>,
@@ -231,7 +231,7 @@ fn handle_powerup_selection(
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                if let Ok((_, mut player)) = player_query.get_single_mut() {
+                if let Ok((_, mut player)) = player_query.single_mut() {
                     apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut blade_query, weapon_registry.as_deref(), &weapon_data_assets);
                 }
                 cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
@@ -254,7 +254,7 @@ fn handle_powerup_selection(
         if gamepad.just_pressed(GamepadButton::South) {
             for (button, _, _) in interaction_query.iter() {
                 if button.index == powerup_state.selected_index {
-                    if let Ok((_, mut player)) = player_query.get_single_mut() {
+                    if let Ok((_, mut player)) = player_query.single_mut() {
                         apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut blade_query, weapon_registry.as_deref(), &weapon_data_assets);
                     }
                     cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);

@@ -281,8 +281,8 @@ fn update_player_stats_display(
     player_query: Query<&Player, Changed<Player>>,
     mut text_query: Query<&mut Text, With<PlayerStatsText>>,
 ) {
-    if let Ok(player) = player_query.get_single() {
-        if let Ok(mut text) = text_query.get_single_mut() {
+    if let Ok(player) = player_query.single() {
+        if let Ok(mut text) = text_query.single_mut() {
             **text = format!(
                 "Health: {:.0}/{:.0} | Level: {}",
                 player.health, player.max_health, player.level
@@ -298,13 +298,13 @@ fn update_xp_bar(
 ) {
     if player_xp.is_changed() {
         // Update XP bar width
-        if let Ok(mut node) = xp_bar_query.get_single_mut() {
+        if let Ok(mut node) = xp_bar_query.single_mut() {
             let xp_percent = (player_xp.current_xp as f32 / player_xp.xp_to_next_level as f32).clamp(0.0, 1.0);
             node.width = Val::Px(300.0 * xp_percent);
         }
 
         // Update XP text
-        if let Ok(mut text) = xp_text_query.get_single_mut() {
+        if let Ok(mut text) = xp_text_query.single_mut() {
             **text = format!("XP: {}/{}", player_xp.current_xp, player_xp.xp_to_next_level);
         }
     }
