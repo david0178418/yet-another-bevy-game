@@ -47,7 +47,11 @@ struct XPBarForeground;
 #[derive(Component)]
 struct XPText;
 
-fn spawn_player(mut commands: Commands, mut blade_query: Query<&mut crate::weapons::OrbitingBlade>) {
+fn spawn_player(
+	mut commands: Commands,
+	mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
+	config: Res<crate::GameConfig>,
+) {
     // Spawn player (blue block)
     let player_entity = commands.spawn((
         Sprite {
@@ -62,7 +66,7 @@ fn spawn_player(mut commands: Commands, mut blade_query: Query<&mut crate::weapo
     )).id();
 
     // Give player a starter weapon (orbiting blade)
-    crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1, &mut blade_query);
+    crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, config.initial_weapon_level, &mut blade_query);
 
     // Spawn ground platform
     commands.spawn((

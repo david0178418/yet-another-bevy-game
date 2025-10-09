@@ -23,7 +23,39 @@ const ASPECT_RATIO: f32 = GAME_WIDTH / GAME_HEIGHT;
 #[derive(Component)]
 struct GameCamera;
 
+#[derive(Resource)]
+pub struct GameConfig {
+	pub initial_weapon_level: u32,
+}
+
+fn parse_cli_args() -> GameConfig {
+	let args: Vec<String> = std::env::args().collect();
+	let mut initial_weapon_level = 1;
+
+	let mut i = 1;
+	while i < args.len() {
+		match args[i].as_str() {
+			"--initial-weapon-level" | "-w" => {
+				if i + 1 < args.len() {
+					initial_weapon_level = args[i + 1].parse().unwrap_or(1);
+					i += 2;
+				} else {
+					i += 1;
+				}
+			}
+			_ => {
+				i += 1;
+			}
+		}
+	}
+
+	GameConfig {
+		initial_weapon_level,
+	}
+}
+
 fn main() {
+	let config = parse_cli_args();
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -44,6 +76,7 @@ fn main() {
             CombatPlugin,
         ))
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(config)
         .add_systems(Startup, setup_camera)
         .add_systems(Update, update_camera_viewport)
         .run();
