@@ -62,9 +62,14 @@ impl AssetLoader for WeaponDataLoader {
 }
 
 #[derive(Resource)]
-pub struct WeaponDefinitions {
-	pub orbiting_blade: Handle<WeaponData>,
-	pub auto_shooter: Handle<WeaponData>,
+pub struct WeaponRegistry {
+	weapons: std::collections::HashMap<String, Handle<WeaponData>>,
+}
+
+impl WeaponRegistry {
+	pub fn get(&self, id: &str) -> Option<&Handle<WeaponData>> {
+		self.weapons.get(id)
+	}
 }
 
 impl Plugin for WeaponsPlugin {
@@ -81,10 +86,17 @@ impl Plugin for WeaponsPlugin {
 }
 
 fn load_weapon_definitions(mut commands: Commands, asset_server: Res<AssetServer>) {
-	commands.insert_resource(WeaponDefinitions {
-		orbiting_blade: asset_server.load("weapons/orbiting_blade.weapon.ron"),
-		auto_shooter: asset_server.load("weapons/auto_shooter.weapon.ron"),
-	});
+	let weapon_ids = ["orbiting_blade", "auto_shooter"];
+
+	let weapons = weapon_ids
+		.iter()
+		.map(|id| {
+			let path = format!("weapons/{}.weapon.ron", id);
+			(id.to_string(), asset_server.load(path))
+		})
+		.collect();
+
+	commands.insert_resource(WeaponRegistry { weapons });
 }
 
 #[derive(Component)]
@@ -102,22 +114,41 @@ pub struct AutoShooter {
     pub projectile_speed: f32,
 }
 
+#[derive(Component, Clone)]
+pub struct AutoShooterConfig {
+	pub projectile_size: (f32, f32),
+	pub projectile_color: (f32, f32, f32),
+	pub projectile_lifetime: f32,
+}
+
 #[derive(Component)]
 pub struct Projectile {
     pub damage: f32,
     pub lifetime: Timer,
 }
 
-pub fn spawn_orbiting_blade(
+pub fn spawn_weapon_from_data(
     commands: &mut Commands,
+    weapon_data: &WeaponData,
     count: u32,
     blade_query: &mut Query<&mut OrbitingBlade>,
-    weapon_defs: Option<&WeaponDefinitions>,
-    weapon_data_assets: &Assets<WeaponData>,
 ) {
-    let Some(defs) = weapon_defs else { return };
-    let Some(weapon_data) = weapon_data_assets.get(&defs.orbiting_blade) else { return };
-    let WeaponTypeData::OrbitingBlade(ref blade_data) = weapon_data.weapon_type else { return };
+    match &weapon_data.weapon_type {
+        WeaponTypeData::OrbitingBlade(blade_data) => {
+            spawn_orbiting_blade_from_data(commands, blade_data, count, blade_query);
+        }
+        WeaponTypeData::AutoShooter(shooter_data) => {
+            spawn_auto_shooter_from_data(commands, shooter_data);
+        }
+    }
+}
+
+fn spawn_orbiting_blade_from_data(
+    commands: &mut Commands,
+    blade_data: &OrbitingBladeData,
+    count: u32,
+    blade_query: &mut Query<&mut OrbitingBlade>,
+) {
 
     let existing_count = blade_query.iter().count();
     let total_count = existing_count + count as usize;
@@ -147,20 +178,22 @@ pub fn spawn_orbiting_blade(
     }
 }
 
-pub fn spawn_auto_shooter(
+fn spawn_auto_shooter_from_data(
     commands: &mut Commands,
-    weapon_defs: Option<&WeaponDefinitions>,
-    weapon_data_assets: &Assets<WeaponData>,
+    shooter_data: &AutoShooterData,
 ) {
-    let Some(defs) = weapon_defs else { return };
-    let Some(weapon_data) = weapon_data_assets.get(&defs.auto_shooter) else { return };
-    let WeaponTypeData::AutoShooter(ref shooter_data) = weapon_data.weapon_type else { return };
-
-    commands.spawn(AutoShooter {
-        cooldown: Timer::from_seconds(shooter_data.cooldown, TimerMode::Repeating),
-        damage: shooter_data.damage,
-        projectile_speed: shooter_data.projectile_speed,
-    });
+    commands.spawn((
+        AutoShooter {
+            cooldown: Timer::from_seconds(shooter_data.cooldown, TimerMode::Repeating),
+            damage: shooter_data.damage,
+            projectile_speed: shooter_data.projectile_speed,
+        },
+        AutoShooterConfig {
+            projectile_size: shooter_data.projectile_size,
+            projectile_color: shooter_data.projectile_color,
+            projectile_lifetime: shooter_data.projectile_lifetime,
+        },
+    ));
 }
 
 fn update_orbiting_blade(
@@ -181,19 +214,14 @@ fn update_orbiting_blade(
 
 fn update_auto_shooter(
     mut commands: Commands,
-    mut shooter_query: Query<&mut AutoShooter>,
+    mut shooter_query: Query<(&mut AutoShooter, &AutoShooterConfig)>,
     player_query: Query<&Transform, With<crate::player::Player>>,
     enemy_query: Query<&Transform, With<crate::enemy::Enemy>>,
     time: Res<Time<Virtual>>,
-    weapon_defs: Option<Res<WeaponDefinitions>>,
-    weapon_data_assets: Res<Assets<WeaponData>>,
 ) {
-    let Some(defs) = weapon_defs else { return };
-    let Some(weapon_data) = weapon_data_assets.get(&defs.auto_shooter) else { return };
-    let WeaponTypeData::AutoShooter(ref shooter_data) = weapon_data.weapon_type else { return };
 
     if let Ok(player_transform) = player_query.get_single() {
-        for mut shooter in shooter_query.iter_mut() {
+        for (mut shooter, config) in shooter_query.iter_mut() {
             if shooter.cooldown.tick(time.delta()).just_finished() {
                 // Find nearest enemy
                 let mut nearest_distance = f32::MAX;
@@ -210,8 +238,8 @@ fn update_auto_shooter(
                 // Spawn projectile
                 commands.spawn((
                     Sprite {
-                        color: Color::srgb(shooter_data.projectile_color.0, shooter_data.projectile_color.1, shooter_data.projectile_color.2),
-                        custom_size: Some(Vec2::new(shooter_data.projectile_size.0, shooter_data.projectile_size.1)),
+                        color: Color::srgb(config.projectile_color.0, config.projectile_color.1, config.projectile_color.2),
+                        custom_size: Some(Vec2::new(config.projectile_size.0, config.projectile_size.1)),
                         ..default()
                     },
                     Transform::from_xyz(
@@ -225,7 +253,7 @@ fn update_auto_shooter(
                     },
                     Projectile {
                         damage: shooter.damage,
-                        lifetime: Timer::from_seconds(shooter_data.projectile_lifetime, TimerMode::Once),
+                        lifetime: Timer::from_seconds(config.projectile_lifetime, TimerMode::Once),
                     },
                 ));
             }

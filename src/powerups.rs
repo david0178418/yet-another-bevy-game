@@ -21,71 +21,47 @@ impl Plugin for PowerupsPlugin {
 #[derive(Resource)]
 pub struct PowerupState {
     pub showing: bool,
-    pub options: Vec<PowerupType>,
+    pub options: Vec<crate::PowerupDefinition>,
     pub selected_index: usize,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum PowerupType {
-    OrbitingBlade,
-    AutoShooter,
-    SpeedBoost,
-    JumpBoost,
-    MaxHealthIncrease,
-}
-
-impl PowerupType {
-    pub fn name(&self) -> &str {
-        match self {
-            PowerupType::OrbitingBlade => "Orbiting Blade",
-            PowerupType::AutoShooter => "Auto Shooter",
-            PowerupType::SpeedBoost => "Speed Boost",
-            PowerupType::JumpBoost => "Jump Boost",
-            PowerupType::MaxHealthIncrease => "Max Health +20",
-        }
-    }
-
-    pub fn description(&self) -> &str {
-        match self {
-            PowerupType::OrbitingBlade => "Adds a blade that orbits around you",
-            PowerupType::AutoShooter => "Auto-fires projectiles at enemies",
-            PowerupType::SpeedBoost => "Increases movement speed",
-            PowerupType::JumpBoost => "Increases jump height",
-            PowerupType::MaxHealthIncrease => "Increases maximum health and heals",
-        }
-    }
 }
 
 #[derive(Component)]
 struct PowerupButton {
-    powerup_type: PowerupType,
+    powerup_def: crate::PowerupDefinition,
     index: usize,
 }
 
 fn apply_powerup(
-	powerup_type: &PowerupType,
+	powerup_def: &crate::PowerupDefinition,
 	commands: &mut Commands,
 	player: &mut crate::player::Player,
 	blade_query: &mut Query<&mut crate::weapons::OrbitingBlade>,
-	weapon_defs: Option<&crate::weapons::WeaponDefinitions>,
+	weapon_registry: Option<&crate::weapons::WeaponRegistry>,
 	weapon_data_assets: &Assets<crate::weapons::WeaponData>,
 ) {
-	match powerup_type {
-		PowerupType::OrbitingBlade => {
-			crate::weapons::spawn_orbiting_blade(commands, 1, blade_query, weapon_defs, weapon_data_assets);
+	match powerup_def {
+		crate::PowerupDefinition::Weapon(weapon_id) => {
+			if let Some(registry) = weapon_registry {
+				if let Some(handle) = registry.get(weapon_id) {
+					if let Some(weapon_data) = weapon_data_assets.get(handle) {
+						crate::weapons::spawn_weapon_from_data(commands, weapon_data, 1, blade_query);
+					}
+				}
+			}
 		}
-		PowerupType::AutoShooter => {
-			crate::weapons::spawn_auto_shooter(commands, weapon_defs, weapon_data_assets);
-		}
-		PowerupType::SpeedBoost => {
-			player.speed += 50.0;
-		}
-		PowerupType::JumpBoost => {
-			player.jump_force += 100.0;
-		}
-		PowerupType::MaxHealthIncrease => {
-			player.max_health += 20.0;
-			player.health = player.max_health;
+		crate::PowerupDefinition::StatBoost(boost) => {
+			match boost.stat {
+				crate::StatType::Speed => {
+					player.speed += boost.value;
+				}
+				crate::StatType::JumpForce => {
+					player.jump_force += boost.value;
+				}
+				crate::StatType::MaxHealth => {
+					player.max_health += boost.value;
+					player.health = player.max_health;
+				}
+			}
 		}
 	}
 }
@@ -109,23 +85,25 @@ fn handle_level_up(
     mut level_up_events: EventReader<crate::experience::LevelUpEvent>,
     mut powerup_state: ResMut<PowerupState>,
     mut time: ResMut<Time<Virtual>>,
+    game_config: Option<Res<crate::GameConfig>>,
+    config_assets: Res<Assets<crate::GameConfigData>>,
 ) {
     for _ in level_up_events.read() {
         if powerup_state.showing {
             continue;
         }
 
-        // Generate 3 random powerup options
-        let all_powerups = vec![
-            PowerupType::OrbitingBlade,
-            PowerupType::AutoShooter,
-            PowerupType::SpeedBoost,
-            PowerupType::JumpBoost,
-            PowerupType::MaxHealthIncrease,
-        ];
+        let Some(game_config) = game_config.as_ref() else {
+            continue;
+        };
 
+        let Some(config_data) = config_assets.get(&game_config.config_handle) else {
+            continue;
+        };
+
+        // Generate 3 random powerup options from the pool
         let mut rng = rand::thread_rng();
-        let options: Vec<PowerupType> = all_powerups
+        let options: Vec<crate::PowerupDefinition> = config_data.powerup_pool
             .choose_multiple(&mut rng, 3)
             .cloned()
             .collect();
@@ -196,7 +174,7 @@ fn handle_level_up(
                 },
                 BackgroundColor(bg_color),
                 PowerupButton {
-                    powerup_type: powerup.clone(),
+                    powerup_def: powerup.clone(),
                     index,
                 },
             )).id();
@@ -247,14 +225,14 @@ fn handle_powerup_selection(
     mut time: ResMut<Time<Virtual>>,
     gamepads: Query<&Gamepad>,
     mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
-    weapon_defs: Option<Res<crate::weapons::WeaponDefinitions>>,
+    weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
     weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
 ) {
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
                 if let Ok((_, mut player)) = player_query.get_single_mut() {
-                    apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query, weapon_defs.as_deref(), &weapon_data_assets);
+                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut blade_query, weapon_registry.as_deref(), &weapon_data_assets);
                 }
                 cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
             }
@@ -277,7 +255,7 @@ fn handle_powerup_selection(
             for (button, _, _) in interaction_query.iter() {
                 if button.index == powerup_state.selected_index {
                     if let Ok((_, mut player)) = player_query.get_single_mut() {
-                        apply_powerup(&button.powerup_type, &mut commands, &mut player, &mut blade_query, weapon_defs.as_deref(), &weapon_data_assets);
+                        apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut blade_query, weapon_registry.as_deref(), &weapon_data_assets);
                     }
                     cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
                     break;

@@ -4,8 +4,8 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_player)
-            .add_systems(Update, (
+        app.add_systems(Update, (
+                spawn_player,
                 spawn_initial_weapon,
                 player_movement,
                 player_jump,
@@ -17,6 +17,7 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component)]
 struct NeedsInitialWeapon {
+	weapon_id: String,
 	count: u32,
 }
 
@@ -148,10 +149,25 @@ fn spawn_player_ui(commands: &mut Commands) {
 
 fn spawn_player(
 	mut commands: Commands,
-	config: Res<crate::GameConfig>,
+	game_config: Option<Res<crate::GameConfig>>,
+	config_assets: Res<Assets<crate::GameConfigData>>,
+	player_query: Query<(), With<Player>>,
 ) {
+	// Only spawn once
+	if !player_query.is_empty() {
+		return;
+	}
+
 	const PLAYER_SIZE: Vec2 = Vec2::new(40.0, 40.0);
 	const PLAYER_SPAWN: Vec3 = Vec3::new(0.0, -200.0, 0.0);
+
+	let Some(game_config) = game_config else {
+		return;
+	};
+
+	let Some(config_data) = config_assets.get(&game_config.config_handle) else {
+		return;
+	};
 
 	commands.spawn((
 		Sprite {
@@ -164,7 +180,8 @@ fn spawn_player(
 		crate::physics::Velocity { x: 0.0, y: 0.0 },
 		crate::physics::Grounded(false),
 		NeedsInitialWeapon {
-			count: config.initial_weapon_level,
+			weapon_id: config_data.initial_weapon.weapon_id.clone(),
+			count: config_data.initial_weapon.level,
 		},
 	));
 
@@ -176,18 +193,23 @@ fn spawn_initial_weapon(
 	mut commands: Commands,
 	mut player_query: Query<(Entity, &NeedsInitialWeapon)>,
 	mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
-	weapon_defs: Option<Res<crate::weapons::WeaponDefinitions>>,
+	weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
 	weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
 ) {
+	let Some(registry) = weapon_registry else { return };
+
 	for (entity, needs_weapon) in player_query.iter_mut() {
-		crate::weapons::spawn_orbiting_blade(
-			&mut commands,
-			needs_weapon.count,
-			&mut blade_query,
-			weapon_defs.as_deref(),
-			&weapon_data_assets,
-		);
-		commands.entity(entity).remove::<NeedsInitialWeapon>();
+		if let Some(handle) = registry.get(&needs_weapon.weapon_id) {
+			if let Some(weapon_data) = weapon_data_assets.get(handle) {
+				crate::weapons::spawn_weapon_from_data(
+					&mut commands,
+					weapon_data,
+					needs_weapon.count,
+					&mut blade_query,
+				);
+				commands.entity(entity).remove::<NeedsInitialWeapon>();
+			}
+		}
 	}
 }
 

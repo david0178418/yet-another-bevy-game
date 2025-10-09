@@ -1,4 +1,5 @@
-use bevy::{prelude::*, render::camera::{ScalingMode, Viewport}, ui::UiScale, window::WindowResized};
+use bevy::{prelude::*, render::camera::{ScalingMode, Viewport}, ui::UiScale, window::WindowResized, asset::AssetLoader};
+use serde::Deserialize;
 
 mod player;
 mod physics;
@@ -23,28 +24,93 @@ const ASPECT_RATIO: f32 = GAME_WIDTH / GAME_HEIGHT;
 #[derive(Component)]
 struct GameCamera;
 
-#[derive(Resource)]
-pub struct GameConfig {
-	pub initial_weapon_level: u32,
+#[derive(Deserialize, Clone)]
+pub struct InitialWeapon {
+	pub weapon_id: String,
+	pub level: u32,
 }
 
-fn parse_cli_args() -> GameConfig {
-	let initial_weapon_level = std::env::args()
-		.collect::<Vec<String>>()
-		.windows(2)
-		.find_map(|window| {
-			matches!(window[0].as_str(), "--initial-weapon-level" | "-w")
-				.then(|| window[1].parse().unwrap_or(1))
-		})
-		.unwrap_or(1);
+#[derive(Deserialize, Clone)]
+pub enum StatType {
+	Speed,
+	JumpForce,
+	MaxHealth,
+}
 
-	GameConfig {
-		initial_weapon_level,
+#[derive(Deserialize, Clone)]
+pub struct StatBoostData {
+	pub stat: StatType,
+	pub value: f32,
+	pub name: String,
+	pub description: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub enum PowerupDefinition {
+	Weapon(String),
+	StatBoost(StatBoostData),
+}
+
+impl PowerupDefinition {
+	pub fn name(&self) -> &str {
+		match self {
+			PowerupDefinition::Weapon(id) => id,
+			PowerupDefinition::StatBoost(data) => &data.name,
+		}
+	}
+
+	pub fn description(&self) -> &str {
+		match self {
+			PowerupDefinition::Weapon(id) => {
+				match id.as_str() {
+					"orbiting_blade" => "Adds a blade that orbits around you",
+					"auto_shooter" => "Auto-fires projectiles at enemies",
+					_ => "Unknown weapon",
+				}
+			}
+			PowerupDefinition::StatBoost(data) => &data.description,
+		}
 	}
 }
 
+#[derive(Asset, TypePath, Deserialize, Clone)]
+pub struct GameConfigData {
+	pub initial_weapon: InitialWeapon,
+	pub powerup_pool: Vec<PowerupDefinition>,
+}
+
+#[derive(Default)]
+struct GameConfigLoader;
+
+impl AssetLoader for GameConfigLoader {
+	type Asset = GameConfigData;
+	type Settings = ();
+	type Error = std::io::Error;
+
+	async fn load(
+		&self,
+		reader: &mut dyn bevy::asset::io::Reader,
+		_settings: &Self::Settings,
+		_load_context: &mut bevy::asset::LoadContext<'_>,
+	) -> Result<Self::Asset, Self::Error> {
+		let mut bytes = Vec::new();
+		reader.read_to_end(&mut bytes).await?;
+		let data = ron::de::from_bytes::<GameConfigData>(&bytes)
+			.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+		Ok(data)
+	}
+
+	fn extensions(&self) -> &[&str] {
+		&["game_config.ron"]
+	}
+}
+
+#[derive(Resource)]
+pub struct GameConfig {
+	pub config_handle: Handle<GameConfigData>,
+}
+
 fn main() {
-	let config = parse_cli_args();
 	App::new()
 		.add_plugins(DefaultPlugins.set(WindowPlugin {
 			primary_window: Some(Window {
@@ -55,6 +121,8 @@ fn main() {
 			}),
 			..default()
 		}))
+		.init_asset::<GameConfigData>()
+		.init_asset_loader::<GameConfigLoader>()
 		.add_plugins((
 			PhysicsPlugin,
 			PlayerPlugin,
@@ -65,10 +133,14 @@ fn main() {
 			CombatPlugin,
 		))
 		.insert_resource(ClearColor(Color::BLACK))
-		.insert_resource(config)
-		.add_systems(Startup, setup_camera)
+		.add_systems(Startup, (setup_camera, load_game_config))
 		.add_systems(Update, update_camera_viewport)
 		.run();
+}
+
+fn load_game_config(mut commands: Commands, asset_server: Res<AssetServer>) {
+	let config_handle = asset_server.load("game_config.ron");
+	commands.insert_resource(GameConfig { config_handle });
 }
 
 fn setup_camera(mut commands: Commands, windows: Query<&Window>, mut ui_scale: ResMut<UiScale>) {

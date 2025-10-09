@@ -78,29 +78,41 @@ impl AssetLoader for EnemyDataLoader {
 }
 
 #[derive(Resource)]
-pub struct EnemyDefinitions {
-	pub weak: Handle<EnemyData>,
-	pub medium: Handle<EnemyData>,
-	pub strong: Handle<EnemyData>,
+pub struct EnemyRegistry {
+	enemies: std::collections::HashMap<String, Handle<EnemyData>>,
+	enemy_ids: Vec<String>,
 }
 
-impl EnemyDefinitions {
-	fn random_handle(&self) -> &Handle<EnemyData> {
-		let mut rng = rand::thread_rng();
-		match rng.gen_range(0..3) {
-			0 => &self.weak,
-			1 => &self.medium,
-			_ => &self.strong,
+impl EnemyRegistry {
+	pub fn get(&self, id: &str) -> Option<&Handle<EnemyData>> {
+		self.enemies.get(id)
+	}
+
+	pub fn random_id(&self) -> Option<&str> {
+		if self.enemy_ids.is_empty() {
+			return None;
 		}
+		let mut rng = rand::thread_rng();
+		let index = rng.gen_range(0..self.enemy_ids.len());
+		Some(&self.enemy_ids[index])
 	}
 }
 
 
 fn load_enemy_definitions(mut commands: Commands, asset_server: Res<AssetServer>) {
-	commands.insert_resource(EnemyDefinitions {
-		weak: asset_server.load("enemies/weak.enemy.ron"),
-		medium: asset_server.load("enemies/medium.enemy.ron"),
-		strong: asset_server.load("enemies/strong.enemy.ron"),
+	let enemy_ids = vec!["weak", "medium", "strong"];
+
+	let enemies = enemy_ids
+		.iter()
+		.map(|id| {
+			let path = format!("enemies/{}.enemy.ron", id);
+			(id.to_string(), asset_server.load(path))
+		})
+		.collect();
+
+	commands.insert_resource(EnemyRegistry {
+		enemies,
+		enemy_ids: enemy_ids.into_iter().map(String::from).collect(),
 	});
 }
 
@@ -123,19 +135,20 @@ fn spawn_enemies(
     mut timer: ResMut<EnemySpawnTimer>,
     wave: Res<WaveTimer>,
     player_query: Query<&Transform, With<crate::player::Player>>,
-    enemy_defs: Option<Res<EnemyDefinitions>>,
+    enemy_registry: Option<Res<EnemyRegistry>>,
     enemy_data_assets: Res<Assets<EnemyData>>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
         let mut rng = rand::thread_rng();
 
-        if let (Ok(player_transform), Some(defs)) = (player_query.get_single(), enemy_defs) {
+        if let (Ok(player_transform), Some(registry)) = (player_query.get_single(), enemy_registry) {
             // Spawn enemies off-screen
             let spawn_side = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
             let spawn_x = player_transform.translation.x + spawn_side * 700.0;
             let spawn_y = rng.gen_range(-200.0..100.0);
 
-            let enemy_handle = defs.random_handle();
+            let Some(enemy_id) = registry.random_id() else { return };
+            let Some(enemy_handle) = registry.get(enemy_id) else { return };
 
             // Wait for asset to be loaded
             let Some(enemy_data) = enemy_data_assets.get(enemy_handle) else {
