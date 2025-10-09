@@ -38,8 +38,19 @@ pub fn spawn_orbiting_blade(
     commands: &mut Commands,
     _player_entity: Entity,
     count: u32,
+    blade_query: &mut Query<&mut OrbitingBlade>,
 ) {
+    let existing_count = blade_query.iter().count();
+    let total_count = existing_count + count as usize;
+
+    // Redistribute existing blades
+    for (index, mut blade) in blade_query.iter_mut().enumerate() {
+        blade.angle = (index as f32 / total_count as f32) * 2.0 * PI;
+    }
+
+    // Spawn new blades with evenly distributed angles
     for i in 0..count {
+        let blade_index = existing_count + i as usize;
         commands.spawn((
             Sprite {
                 color: Color::srgb(0.8, 0.8, 0.9),
@@ -48,7 +59,7 @@ pub fn spawn_orbiting_blade(
             },
             Transform::from_xyz(0.0, 0.0, 1.0),
             OrbitingBlade {
-                angle: (i as f32 / count as f32) * 2.0 * PI,
+                angle: (blade_index as f32 / total_count as f32) * 2.0 * PI,
                 radius: 80.0,
                 speed: 3.0,
                 damage: 200.0,

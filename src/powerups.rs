@@ -204,6 +204,7 @@ fn handle_powerup_selection(
     mut player_query: Query<(Entity, &mut crate::player::Player)>,
     mut time: ResMut<Time<Virtual>>,
     gamepads: Query<&Gamepad>,
+    mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
 ) {
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
@@ -212,7 +213,7 @@ fn handle_powerup_selection(
                 if let Ok((player_entity, mut player)) = player_query.get_single_mut() {
                     match button.powerup_type {
                         PowerupType::OrbitingBlade => {
-                            crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1);
+                            crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1, &mut blade_query);
                         }
                         PowerupType::AutoShooter => {
                             crate::weapons::spawn_auto_shooter(&mut commands, player_entity);
@@ -264,7 +265,7 @@ fn handle_powerup_selection(
                     if let Ok((player_entity, mut player)) = player_query.get_single_mut() {
                         match button.powerup_type {
                             PowerupType::OrbitingBlade => {
-                                crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1);
+                                crate::weapons::spawn_orbiting_blade(&mut commands, player_entity, 1, &mut blade_query);
                             }
                             PowerupType::AutoShooter => {
                                 crate::weapons::spawn_auto_shooter(&mut commands, player_entity);
