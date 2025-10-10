@@ -113,6 +113,7 @@ fn spawn_player_ui(commands: &mut Commands) {
 			..default()
 		},
 		BackgroundColor(XP_BAR_COLOR_BG),
+		ZIndex(0),
 		XPBarBackground,
 	));
 
@@ -126,6 +127,7 @@ fn spawn_player_ui(commands: &mut Commands) {
 			..default()
 		},
 		BackgroundColor(XP_BAR_COLOR_FG),
+		ZIndex(1),
 		XPBarForeground,
 	));
 
@@ -142,6 +144,7 @@ fn spawn_player_ui(commands: &mut Commands) {
 			font_size: UI_FONT_SIZE_SMALL,
 			..default()
 		},
+		ZIndex(2),
 		XPText,
 	));
 }
@@ -322,16 +325,20 @@ fn update_xp_bar(
     mut xp_bar_query: Query<&mut Node, With<XPBarForeground>>,
     mut xp_text_query: Query<&mut Text, With<XPText>>,
 ) {
-    if player_xp.is_changed() {
-        // Update XP bar width
-        if let Ok(mut node) = xp_bar_query.single_mut() {
-            let xp_percent = (player_xp.current_xp as f32 / player_xp.xp_to_next_level as f32).clamp(0.0, 1.0);
-            node.width = Val::Px(crate::constants::XP_BAR_WIDTH * xp_percent);
-        }
+    // Only update if UI exists
+    let Ok(mut node) = xp_bar_query.single_mut() else {
+        return;
+    };
 
-        // Update XP text
-        if let Ok(mut text) = xp_text_query.single_mut() {
-            **text = format!("XP: {}/{}", player_xp.current_xp, player_xp.xp_to_next_level);
-        }
-    }
+    let Ok(mut text) = xp_text_query.single_mut() else {
+        return;
+    };
+
+    // Update XP bar width
+    let xp_percent = (player_xp.current_xp as f32 / player_xp.xp_to_next_level as f32).clamp(0.0, 1.0);
+    let new_width = crate::constants::XP_BAR_WIDTH * xp_percent;
+    node.width = Val::Px(new_width);
+
+    // Update XP text
+    **text = format!("XP: {}/{}", player_xp.current_xp, player_xp.xp_to_next_level);
 }
