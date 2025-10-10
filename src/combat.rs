@@ -84,8 +84,8 @@ fn handle_damageable_death(
                 if let Some(enemy) = enemy_data {
                     commands.spawn((
                         Sprite {
-                            color: Color::srgb(0.9, 0.7, 0.2),
-                            custom_size: Some(Vec2::new(15.0, 15.0)),
+                            color: crate::constants::XP_ORB_COLOR,
+                            custom_size: Some(crate::constants::XP_ORB_SIZE),
                             ..default()
                         },
                         Transform::from_translation(transform.translation),

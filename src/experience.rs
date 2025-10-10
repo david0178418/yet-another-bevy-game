@@ -6,7 +6,7 @@ impl Plugin for ExperiencePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PlayerExperience {
             current_xp: 0,
-            xp_to_next_level: 100,
+            xp_to_next_level: crate::constants::INITIAL_XP_TO_NEXT_LEVEL,
         })
         .add_message::<LevelUpEvent>()
         .add_systems(Update, (
@@ -41,9 +41,9 @@ fn move_xp_orbs_to_player(
             let distance = player_transform.translation.distance(orb_transform.translation);
 
             // Attract orbs within range
-            if distance < 150.0 {
+            if distance < crate::constants::XP_ORB_ATTRACTION_RANGE {
                 let direction = (player_transform.translation - orb_transform.translation).normalize();
-                orb_transform.translation += direction * 300.0 * time.delta_secs();
+                orb_transform.translation += direction * crate::constants::XP_ORB_MOVEMENT_SPEED * time.delta_secs();
             }
         }
     }
@@ -59,7 +59,7 @@ fn collect_experience(
         for (entity, orb_transform, orb) in orb_query.iter() {
             let distance = player_transform.translation.distance(orb_transform.translation);
 
-            if distance < 30.0 {
+            if distance < crate::constants::XP_ORB_COLLECTION_RANGE {
                 player_xp.current_xp += orb.value;
                 commands.entity(entity).despawn();
             }
@@ -74,7 +74,7 @@ fn check_level_up(
 ) {
     if player_xp.current_xp >= player_xp.xp_to_next_level {
         player_xp.current_xp -= player_xp.xp_to_next_level;
-        player_xp.xp_to_next_level = (player_xp.xp_to_next_level as f32 * 1.5) as u32;
+        player_xp.xp_to_next_level = (player_xp.xp_to_next_level as f32 * crate::constants::XP_LEVEL_SCALING) as u32;
 
         if let Ok(mut player) = player_query.single_mut() {
             player.level += 1;

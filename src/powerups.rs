@@ -3,6 +3,40 @@ use rand::seq::SliceRandom;
 
 pub struct PowerupsPlugin;
 
+fn get_powerup_name(
+	powerup: &crate::PowerupDefinition,
+	weapon_registry: Option<&crate::weapons::WeaponRegistry>,
+	weapon_assets: &Assets<crate::weapons::WeaponData>,
+) -> String {
+	match powerup {
+		crate::PowerupDefinition::Weapon(id) => {
+			weapon_registry
+				.and_then(|r| r.get(id))
+				.and_then(|h| weapon_assets.get(h))
+				.map(|w| w.name.clone())
+				.unwrap_or_else(|| id.clone())
+		}
+		crate::PowerupDefinition::StatBoost(data) => data.name.clone(),
+	}
+}
+
+fn get_powerup_description(
+	powerup: &crate::PowerupDefinition,
+	weapon_registry: Option<&crate::weapons::WeaponRegistry>,
+	weapon_assets: &Assets<crate::weapons::WeaponData>,
+) -> String {
+	match powerup {
+		crate::PowerupDefinition::Weapon(id) => {
+			weapon_registry
+				.and_then(|r| r.get(id))
+				.and_then(|h| weapon_assets.get(h))
+				.map(|w| w.description.clone())
+				.unwrap_or_else(|| format!("Unknown weapon: {}", id))
+		}
+		crate::PowerupDefinition::StatBoost(data) => data.description.clone(),
+	}
+}
+
 impl Plugin for PowerupsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PowerupState {
@@ -103,10 +137,10 @@ fn handle_level_up(
             continue;
         };
 
-        // Generate 3 random powerup options from the pool
+        // Generate random powerup options from the pool
         let mut rng = rand::thread_rng();
         let options: Vec<crate::PowerupDefinition> = config_data.powerup_pool
-            .choose_multiple(&mut rng, 3)
+            .choose_multiple(&mut rng, crate::constants::POWERUP_OPTIONS_COUNT)
             .cloned()
             .collect();
 
@@ -127,13 +161,13 @@ fn handle_level_up(
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, crate::constants::POWERUP_OVERLAY_ALPHA)),
             PowerupUIContainer,
         )).id();
 
         let button_container = commands.spawn(Node {
             flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(20.0),
+            row_gap: Val::Px(crate::constants::POWERUP_BUTTON_GAP),
             ..default()
         }).id();
 
@@ -143,12 +177,12 @@ fn handle_level_up(
         let title = commands.spawn((
             Text::new("LEVEL UP! Choose a Powerup:"),
             TextFont {
-                font_size: 40.0,
+                font_size: crate::constants::UI_FONT_SIZE_LARGE,
                 ..default()
             },
             TextColor(Color::srgb(0.9, 0.9, 0.3)),
             Node {
-                margin: UiRect::bottom(Val::Px(30.0)),
+                margin: UiRect::bottom(Val::Px(crate::constants::POWERUP_TITLE_MARGIN)),
                 ..default()
             },
         )).id();
@@ -159,19 +193,19 @@ fn handle_level_up(
         for (index, powerup) in options.iter().enumerate() {
             // First button is selected by default
             let bg_color = if index == 0 {
-                Color::srgb(0.3, 0.3, 0.5) // Highlighted
+                crate::constants::POWERUP_COLOR_SELECTED
             } else {
-                Color::srgb(0.2, 0.2, 0.3) // Normal
+                crate::constants::POWERUP_COLOR_NORMAL
             };
 
             let button = commands.spawn((
                 Button,
                 Node {
-                    width: Val::Px(400.0),
-                    height: Val::Px(80.0),
+                    width: Val::Px(crate::constants::POWERUP_BUTTON_WIDTH),
+                    height: Val::Px(crate::constants::POWERUP_BUTTON_HEIGHT),
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
-                    padding: UiRect::all(Val::Px(10.0)),
+                    padding: UiRect::all(Val::Px(crate::constants::POWERUP_BUTTON_PADDING)),
                     ..default()
                 },
                 BackgroundColor(bg_color),
@@ -187,18 +221,18 @@ fn handle_level_up(
             }).id();
 
             let name_text = commands.spawn((
-                Text::new(powerup.name(weapon_registry.as_deref(), &weapon_data_assets)),
+                Text::new(get_powerup_name(powerup, weapon_registry.as_deref(), &weapon_data_assets)),
                 TextFont {
-                    font_size: 24.0,
+                    font_size: crate::constants::UI_FONT_SIZE_MEDIUM,
                     ..default()
                 },
                 TextColor(Color::WHITE),
             )).id();
 
             let desc_text = commands.spawn((
-                Text::new(powerup.description(weapon_registry.as_deref(), &weapon_data_assets)),
+                Text::new(get_powerup_description(powerup, weapon_registry.as_deref(), &weapon_data_assets)),
                 TextFont {
-                    font_size: 16.0,
+                    font_size: crate::constants::UI_FONT_SIZE_SMALL,
                     ..default()
                 },
                 TextColor(Color::srgb(0.7, 0.7, 0.7)),
@@ -238,10 +272,10 @@ fn handle_powerup_selection(
                 cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
             }
             Interaction::Hovered => {
-                *bg_color = Color::srgb(0.3, 0.3, 0.4).into();
+                *bg_color = crate::constants::POWERUP_COLOR_HOVERED.into();
             }
             Interaction::None => {
-                *bg_color = Color::srgb(0.2, 0.2, 0.3).into();
+                *bg_color = crate::constants::POWERUP_COLOR_NORMAL.into();
             }
         }
     }
@@ -311,9 +345,9 @@ fn handle_powerup_navigation(
         // Update button colors based on selection
         for (button, mut bg_color) in button_query.iter_mut() {
             if button.index == powerup_state.selected_index {
-                *bg_color = Color::srgb(0.3, 0.3, 0.5).into(); // Highlighted
+                *bg_color = crate::constants::POWERUP_COLOR_SELECTED.into();
             } else {
-                *bg_color = Color::srgb(0.2, 0.2, 0.3).into(); // Normal
+                *bg_color = crate::constants::POWERUP_COLOR_NORMAL.into();
             }
         }
     }

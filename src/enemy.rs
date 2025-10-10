@@ -8,13 +8,13 @@ impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<EnemyData>()
             .init_asset_loader::<EnemyDataLoader>()
-            .insert_resource(EnemySpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
+            .insert_resource(EnemySpawnTimer(Timer::from_seconds(crate::constants::ENEMY_SPAWN_TIMER, TimerMode::Repeating)))
             .insert_resource(WaveTimer {
-                timer: Timer::from_seconds(30.0, TimerMode::Repeating),
+                timer: Timer::from_seconds(crate::constants::WAVE_DURATION, TimerMode::Repeating),
                 wave: 1,
             })
-            .add_systems(Startup, load_enemy_definitions)
             .add_systems(Update, (
+                initialize_enemy_registry,
                 spawn_enemies,
                 move_enemies,
                 update_wave,
@@ -96,20 +96,33 @@ impl EnemyRegistry {
 }
 
 
-fn load_enemy_definitions(mut commands: Commands, asset_server: Res<AssetServer>) {
-	let enemy_ids = vec!["weak", "medium", "strong"];
+fn initialize_enemy_registry(
+	mut commands: Commands,
+	asset_server: Res<AssetServer>,
+	registry: Option<Res<EnemyRegistry>>,
+	game_config: Option<Res<crate::GameConfig>>,
+	config_assets: Res<Assets<crate::GameConfigData>>,
+) {
+	// Only initialize once
+	if registry.is_some() {
+		return;
+	}
 
-	let enemies = enemy_ids
+	// Wait for game config to load
+	let Some(config) = game_config else { return };
+	let Some(config_data) = config_assets.get(&config.config_handle) else { return };
+
+	let enemies = config_data.enemy_ids
 		.iter()
 		.map(|id| {
 			let path = format!("enemies/{}.enemy.ron", id);
-			(id.to_string(), asset_server.load(path))
+			(id.clone(), asset_server.load(path))
 		})
 		.collect();
 
 	commands.insert_resource(EnemyRegistry {
 		enemies,
-		enemy_ids: enemy_ids.into_iter().map(String::from).collect(),
+		enemy_ids: config_data.enemy_ids.clone(),
 	});
 }
 
@@ -141,8 +154,8 @@ fn spawn_enemies(
         if let (Ok(player_transform), Some(registry)) = (player_query.single(), enemy_registry) {
             // Spawn enemies off-screen
             let spawn_side = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
-            let spawn_x = player_transform.translation.x + spawn_side * 700.0;
-            let spawn_y = rng.gen_range(-200.0..100.0);
+            let spawn_x = player_transform.translation.x + spawn_side * crate::constants::ENEMY_SPAWN_DISTANCE;
+            let spawn_y = rng.gen_range(crate::constants::ENEMY_SPAWN_Y_MIN..crate::constants::ENEMY_SPAWN_Y_MAX);
 
             let Some(enemy_id) = registry.random_id() else { return };
             let Some(enemy_handle) = registry.get(enemy_id) else { return };
@@ -153,7 +166,7 @@ fn spawn_enemies(
             };
 
             let size = Vec2::new(enemy_data.size.0, enemy_data.size.1);
-            let scaled_health = enemy_data.base_health * (1.0 + (wave.wave as f32 * 0.2));
+            let scaled_health = enemy_data.base_health * (1.0 + (wave.wave as f32 * crate::constants::WAVE_HEALTH_SCALING));
 
             let enemy_entity = commands.spawn((
                 Sprite {
@@ -184,10 +197,10 @@ fn spawn_enemies(
             commands.spawn((
                 Sprite {
                     color: Color::srgb(0.2, 0.2, 0.2),
-                    custom_size: Some(Vec2::new(size.x, 4.0)),
+                    custom_size: Some(Vec2::new(size.x, crate::constants::HEALTH_BAR_HEIGHT)),
                     ..default()
                 },
-                Transform::from_xyz(spawn_x, spawn_y + size.y / 2.0 + 8.0, 1.0),
+                Transform::from_xyz(spawn_x, spawn_y + size.y / 2.0 + crate::constants::HEALTH_BAR_OFFSET_Y, 1.0),
                 HealthBar { enemy_entity },
                 HealthBarBackground,
             ));
@@ -196,10 +209,10 @@ fn spawn_enemies(
             commands.spawn((
                 Sprite {
                     color: Color::srgb(0.0, 0.8, 0.0),
-                    custom_size: Some(Vec2::new(size.x, 4.0)),
+                    custom_size: Some(Vec2::new(size.x, crate::constants::HEALTH_BAR_HEIGHT)),
                     ..default()
                 },
-                Transform::from_xyz(spawn_x, spawn_y + size.y / 2.0 + 8.0, 2.0),
+                Transform::from_xyz(spawn_x, spawn_y + size.y / 2.0 + crate::constants::HEALTH_BAR_OFFSET_Y, 2.0),
                 HealthBar { enemy_entity },
                 HealthBarForeground { max_health: scaled_health },
             ));
@@ -228,7 +241,7 @@ fn update_wave(
         wave.wave += 1;
 
         // Increase spawn rate with each wave (decrease time between spawns)
-        let new_duration = (2.0 - (wave.wave as f32 * 0.1)).max(0.5);
+        let new_duration = (crate::constants::ENEMY_SPAWN_TIMER - (wave.wave as f32 * crate::constants::WAVE_SPAWN_RATE_SCALING)).max(crate::constants::MIN_SPAWN_DURATION);
         spawn_timer.0.set_duration(std::time::Duration::from_secs_f32(new_duration));
     }
 }
@@ -243,7 +256,7 @@ fn update_health_bars(
         if let Ok((_, enemy_transform, _, enemy_sprite)) = enemy_query.get(health_bar.enemy_entity) {
             let enemy_size = enemy_sprite.custom_size.unwrap_or(Vec2::ONE);
             bar_transform.translation.x = enemy_transform.translation.x;
-            bar_transform.translation.y = enemy_transform.translation.y + enemy_size.y / 2.0 + 8.0;
+            bar_transform.translation.y = enemy_transform.translation.y + enemy_size.y / 2.0 + crate::constants::HEALTH_BAR_OFFSET_Y;
         }
     }
 
@@ -254,10 +267,10 @@ fn update_health_bars(
             let health_percent = (damageable.health / bar_fg.max_health).clamp(0.0, 1.0);
 
             bar_transform.translation.x = enemy_transform.translation.x;
-            bar_transform.translation.y = enemy_transform.translation.y + enemy_size.y / 2.0 + 8.0;
+            bar_transform.translation.y = enemy_transform.translation.y + enemy_size.y / 2.0 + crate::constants::HEALTH_BAR_OFFSET_Y;
 
             // Scale the width based on health
-            bar_sprite.custom_size = Some(Vec2::new(enemy_size.x * health_percent, 4.0));
+            bar_sprite.custom_size = Some(Vec2::new(enemy_size.x * health_percent, crate::constants::HEALTH_BAR_HEIGHT));
 
             // Offset to align left
             bar_transform.translation.x = enemy_transform.translation.x - (enemy_size.x / 2.0) + (enemy_size.x * health_percent / 2.0);

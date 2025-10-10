@@ -1,4 +1,6 @@
 (
+	weapon_ids: ["orbiting_blade", "auto_shooter"],
+	enemy_ids: ["weak", "medium", "strong"],
 	initial_weapon: (
 		weapon_id: "orbiting_blade",
 		level: 1,

@@ -66,8 +66,8 @@ impl Plugin for WeaponsPlugin {
         app.init_asset::<WeaponData>()
             .init_asset_loader::<WeaponDataLoader>()
             .init_resource::<OrbitingEntityCount>()
-            .add_systems(Startup, load_weapon_definitions)
             .add_systems(Update, (
+                initialize_weapon_registry,
                 redistribute_orbiting_entities,
                 update_orbiting_entities,
                 update_projectile_spawners,
@@ -76,14 +76,27 @@ impl Plugin for WeaponsPlugin {
     }
 }
 
-fn load_weapon_definitions(mut commands: Commands, asset_server: Res<AssetServer>) {
-	let weapon_ids = ["orbiting_blade", "auto_shooter"];
+fn initialize_weapon_registry(
+	mut commands: Commands,
+	asset_server: Res<AssetServer>,
+	registry: Option<Res<WeaponRegistry>>,
+	game_config: Option<Res<crate::GameConfig>>,
+	config_assets: Res<Assets<crate::GameConfigData>>,
+) {
+	// Only initialize once
+	if registry.is_some() {
+		return;
+	}
 
-	let weapons = weapon_ids
+	// Wait for game config to load
+	let Some(config) = game_config else { return };
+	let Some(config_data) = config_assets.get(&config.config_handle) else { return };
+
+	let weapons = config_data.weapon_ids
 		.iter()
 		.map(|id| {
 			let path = format!("weapons/{}.weapon.ron", id);
-			(id.to_string(), asset_server.load(path))
+			(id.clone(), asset_server.load(path))
 		})
 		.collect();
 

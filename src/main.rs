@@ -9,6 +9,7 @@ mod experience;
 mod powerups;
 mod combat;
 mod behaviors;
+mod constants;
 
 use player::PlayerPlugin;
 use physics::PhysicsPlugin;
@@ -52,36 +53,11 @@ pub enum PowerupDefinition {
 	StatBoost(StatBoostData),
 }
 
-impl PowerupDefinition {
-	pub fn name<'a>(&'a self, weapon_registry: Option<&'a weapons::WeaponRegistry>, weapon_assets: &'a Assets<weapons::WeaponData>) -> &'a str {
-		match self {
-			PowerupDefinition::Weapon(id) => {
-				weapon_registry
-					.and_then(|r| r.get(id))
-					.and_then(|h| weapon_assets.get(h))
-					.map(|w| w.name.as_str())
-					.unwrap_or(id.as_str())
-			}
-			PowerupDefinition::StatBoost(data) => &data.name,
-		}
-	}
-
-	pub fn description<'a>(&'a self, weapon_registry: Option<&'a weapons::WeaponRegistry>, weapon_assets: &'a Assets<weapons::WeaponData>) -> &'a str {
-		match self {
-			PowerupDefinition::Weapon(id) => {
-				weapon_registry
-					.and_then(|r| r.get(id))
-					.and_then(|h| weapon_assets.get(h))
-					.map(|w| w.description.as_str())
-					.unwrap_or("Unknown weapon")
-			}
-			PowerupDefinition::StatBoost(data) => &data.description,
-		}
-	}
-}
 
 #[derive(Asset, TypePath, Deserialize, Clone)]
 pub struct GameConfigData {
+	pub weapon_ids: Vec<String>,
+	pub enemy_ids: Vec<String>,
 	pub initial_weapon: InitialWeapon,
 	pub powerup_pool: Vec<PowerupDefinition>,
 }

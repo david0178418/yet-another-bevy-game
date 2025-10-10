@@ -24,15 +24,13 @@ pub struct Grounded(pub bool);
 #[derive(Component)]
 pub struct Ground;
 
-const GRAVITY: f32 = -980.0;
-
 fn apply_gravity(
     mut query: Query<(&mut Velocity, &Grounded)>,
     time: Res<Time<Virtual>>,
 ) {
     for (mut velocity, grounded) in query.iter_mut() {
         if !grounded.0 {
-            velocity.y += GRAVITY * time.delta_secs();
+            velocity.y += crate::constants::GRAVITY * time.delta_secs();
         }
     }
 }
@@ -68,7 +66,7 @@ fn check_ground_collision(
             // Check if player is above ground and overlapping horizontally
             if player_right > ground_left && player_left < ground_right {
                 // Check if player is close to ground and moving downward
-                if player_bottom <= ground_top && player_bottom > ground_top - 10.0 && velocity.y <= 0.0 {
+                if player_bottom <= ground_top && player_bottom > ground_top - crate::constants::GROUND_SNAP_DISTANCE && velocity.y <= 0.0 {
                     grounded.0 = true;
                     velocity.y = 0.0;
                     break;
