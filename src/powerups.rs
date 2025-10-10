@@ -16,6 +16,12 @@ struct PowerupUIState<'w, 's> {
 	time: ResMut<'w, Time<Virtual>>,
 }
 
+#[derive(SystemParam)]
+struct InputState<'w, 's> {
+	gamepads: Query<'w, 's, &'static Gamepad>,
+	keyboard: Res<'w, ButtonInput<KeyCode>>,
+}
+
 fn get_powerup_name(
 	powerup: &crate::PowerupDefinition,
 	weapon_resources: &WeaponResources,
@@ -267,8 +273,7 @@ fn handle_powerup_selection(
     button_query: Query<&PowerupButton>,
     mut ui_state: PowerupUIState,
     mut player_query: Query<(&mut crate::player::Player, &mut crate::behaviors::Damageable), With<crate::behaviors::PlayerTag>>,
-    gamepads: Query<&Gamepad>,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    input: InputState,
     weapon_resources: WeaponResources,
 ) {
     // Handle mouse interactions
@@ -303,7 +308,7 @@ fn handle_powerup_selection(
     let mut should_confirm = false;
 
     // Gamepad confirmation
-    for gamepad in gamepads.iter() {
+    for gamepad in input.gamepads.iter() {
         if gamepad.just_pressed(GamepadButton::South) {
             should_confirm = true;
             break;
@@ -311,7 +316,7 @@ fn handle_powerup_selection(
     }
 
     // Keyboard confirmation
-    if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::Space) {
+    if input.keyboard.just_pressed(KeyCode::Enter) || input.keyboard.just_pressed(KeyCode::Space) {
         should_confirm = true;
     }
 
@@ -330,8 +335,7 @@ fn handle_powerup_selection(
 
 fn handle_powerup_navigation(
     mut ui_state: PowerupUIState,
-    gamepads: Query<&Gamepad>,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    input: InputState,
     mut button_query: Query<(&PowerupButton, &mut BackgroundColor)>,
 ) {
     if !ui_state.state.showing || ui_state.state.options.is_empty() {
@@ -341,15 +345,15 @@ fn handle_powerup_navigation(
     let mut direction = 0i32;
 
     // Keyboard navigation
-    if keyboard.just_pressed(KeyCode::ArrowUp) || keyboard.just_pressed(KeyCode::KeyW) {
+    if input.keyboard.just_pressed(KeyCode::ArrowUp) || input.keyboard.just_pressed(KeyCode::KeyW) {
         direction = -1;
     }
-    if keyboard.just_pressed(KeyCode::ArrowDown) || keyboard.just_pressed(KeyCode::KeyS) {
+    if input.keyboard.just_pressed(KeyCode::ArrowDown) || input.keyboard.just_pressed(KeyCode::KeyS) {
         direction = 1;
     }
 
     // Gamepad navigation
-    for gamepad in gamepads.iter() {
+    for gamepad in input.gamepads.iter() {
         if gamepad.just_pressed(GamepadButton::DPadUp) {
             direction = -1;
         }

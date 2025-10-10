@@ -74,4 +74,14 @@ pub const POWERUP_COLOR_SELECTED: Color = Color::srgb(0.3, 0.3, 0.5);
 pub const POWERUP_COLOR_NORMAL: Color = Color::srgb(0.2, 0.2, 0.3);
 pub const POWERUP_COLOR_HOVERED: Color = Color::srgb(0.3, 0.3, 0.4);
 
+// ============ Weapon Constants ============
+
+#[allow(dead_code)]  // Documentation constant for auto_shooter.weapon.ron fire_range
+pub const AUTO_SHOOTER_DEFAULT_RANGE: f32 = 400.0;
+
+#[allow(dead_code)]  // Reserved for future weapon range powerups
+pub const WEAPON_RANGE_BOOST_AMOUNT: f32 = 100.0;
+
+// ============ Platform Constants ============
+
 pub const PLATFORM_COLOR: Color = Color::srgb(0.3, 0.3, 0.3);

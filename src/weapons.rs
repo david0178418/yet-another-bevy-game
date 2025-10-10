@@ -153,6 +153,7 @@ pub fn spawn_entity_from_data(
 					projectile_size,
 					projectile_color,
 					spawn_logic,
+					fire_range,
 				} => {
 					entity_commands.insert(ProjectileSpawner {
 						cooldown: Timer::from_seconds(*cooldown, TimerMode::Repeating),
@@ -164,6 +165,7 @@ pub fn spawn_entity_from_data(
 							color: *projectile_color,
 						},
 						spawn_logic: spawn_logic.clone(),
+						fire_range: *fire_range,
 					});
 				}
 				BehaviorData::FollowPlayer => {
@@ -226,17 +228,29 @@ fn update_projectile_spawners(
             if spawner.cooldown.tick(time.delta()).just_finished() {
                 let spawn_direction = match &spawner.spawn_logic {
                     SpawnLogic::NearestEnemy => {
-                        // Find nearest enemy
-                        enemy_query.iter()
+                        // Find nearest enemy (optionally within range)
+                        let nearest_enemy = enemy_query.iter()
+                            .filter(|enemy_transform| {
+                                // If fire_range is set, only consider enemies within range
+                                if let Some(range) = spawner.fire_range {
+                                    player_transform.translation.distance(enemy_transform.translation) <= range
+                                } else {
+                                    true  // No range limit
+                                }
+                            })
                             .min_by(|a, b| {
                                 let dist_a = player_transform.translation.distance(a.translation);
                                 let dist_b = player_transform.translation.distance(b.translation);
                                 dist_a.partial_cmp(&dist_b).unwrap()
-                            })
-                            .map(|enemy_transform| {
-                                (enemy_transform.translation.x - player_transform.translation.x).signum()
-                            })
-                            .unwrap_or(1.0)
+                            });
+
+                        // If no enemy in range, don't fire
+                        if let Some(enemy_transform) = nearest_enemy {
+                            (enemy_transform.translation.x - player_transform.translation.x).signum()
+                        } else {
+                            // No enemy in range, skip spawning projectile
+                            continue;
+                        }
                     }
                     SpawnLogic::PlayerDirection => 1.0, // Could be enhanced with actual player direction
                     SpawnLogic::Fixed(x, _y) => (*x).signum(),

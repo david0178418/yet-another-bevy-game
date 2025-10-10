@@ -46,10 +46,10 @@ fn apply_velocity(
 }
 
 fn check_ground_collision(
-    mut player_query: Query<(&Transform, &Sprite, &mut Velocity, &mut Grounded), Without<Ground>>,
+    mut player_query: Query<(&mut Transform, &Sprite, &mut Velocity, &mut Grounded), Without<Ground>>,
     ground_query: Query<(&Transform, &Sprite), With<Ground>>,
 ) {
-    for (player_transform, player_sprite, mut velocity, mut grounded) in player_query.iter_mut() {
+    for (mut player_transform, player_sprite, mut velocity, mut grounded) in player_query.iter_mut() {
         let player_size = player_sprite.custom_size.unwrap_or(Vec2::ONE);
         let player_bottom = player_transform.translation.y - player_size.y / 2.0;
         let player_left = player_transform.translation.x - player_size.x / 2.0;
@@ -69,6 +69,8 @@ fn check_ground_collision(
                 if player_bottom <= ground_top && player_bottom > ground_top - crate::constants::GROUND_SNAP_DISTANCE && velocity.y <= 0.0 {
                     grounded.0 = true;
                     velocity.y = 0.0;
+                    // Snap position to ground surface to prevent clipping
+                    player_transform.translation.y = ground_top + player_size.y / 2.0;
                     break;
                 }
             }

@@ -58,6 +58,15 @@ pub struct EnemyTag;
 #[derive(Component)]
 pub struct ProjectileTag;
 
+// ============ Range Detection ============
+
+#[derive(Component)]
+#[allow(dead_code)]  // Reserved for future use (XP attraction, pickups, area triggers)
+pub struct ProximityDetector {
+	pub range: f32,
+	pub target_filter: TargetFilter,
+}
+
 // ============ Spawning Behaviors ============
 
 #[derive(Component)]
@@ -65,6 +74,7 @@ pub struct ProjectileSpawner {
 	pub cooldown: Timer,
 	pub projectile_template: ProjectileTemplate,
 	pub spawn_logic: SpawnLogic,
+	pub fire_range: Option<f32>,  // None = infinite range
 }
 
 #[derive(Clone)]
@@ -104,6 +114,7 @@ pub enum BehaviorData {
 		projectile_size: (f32, f32),
 		projectile_color: (f32, f32, f32),
 		spawn_logic: SpawnLogic,
+		fire_range: Option<f32>,
 	},
 	FollowPlayer,
 }
