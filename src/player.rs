@@ -216,6 +216,7 @@ fn player_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut query: Query<(&mut crate::physics::Velocity, &Player)>,
+    time: Res<Time<Virtual>>,
 ) {
     for (mut velocity, player) in query.iter_mut() {
         let mut direction = 0.0;
@@ -246,7 +247,27 @@ fn player_movement(
             }
         }
 
-        velocity.x = direction * player.speed;
+        // Acceleration-based movement
+        let target_speed = direction * player.speed;
+        let speed_diff = target_speed - velocity.x;
+
+        if speed_diff.abs() > 0.01 {
+            // Choose acceleration or deceleration based on input
+            let accel = if direction.abs() > 0.01 {
+                crate::constants::PLAYER_ACCELERATION
+            } else {
+                crate::constants::PLAYER_DECELERATION
+            };
+
+            let change = speed_diff.signum() * accel * time.delta_secs();
+
+            // Snap to target if close enough, otherwise apply acceleration
+            if speed_diff.abs() <= change.abs() {
+                velocity.x = target_speed;
+            } else {
+                velocity.x += change;
+            }
+        }
     }
 }
 

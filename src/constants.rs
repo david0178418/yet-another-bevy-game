@@ -13,6 +13,8 @@ pub const PLAYER_DEFAULT_HEALTH: f32 = 100.0;
 pub const PLAYER_SIZE: Vec2 = Vec2::new(40.0, 40.0);
 pub const PLAYER_SPAWN_POSITION: Vec3 = Vec3::new(0.0, -200.0, 0.0);
 pub const PLAYER_COLOR: Color = Color::srgb(0.2, 0.4, 0.9);
+pub const PLAYER_ACCELERATION: f32 = 1000.0;
+pub const PLAYER_DECELERATION: f32 = 800.0;
 
 // ============ Input Constants ============
 
