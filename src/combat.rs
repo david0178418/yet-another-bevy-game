@@ -2,6 +2,22 @@ use bevy::prelude::*;
 
 pub struct CombatPlugin;
 
+type DamageableQuery<'w, 's> = Query<'w, 's, (
+    &'static Transform,
+    &'static Sprite,
+    &'static mut crate::behaviors::Damageable,
+    Has<crate::behaviors::EnemyTag>,
+    Has<crate::behaviors::PlayerTag>,
+)>;
+
+type DeathQuery<'w, 's> = Query<'w, 's, (
+    Entity,
+    &'static Transform,
+    &'static crate::behaviors::Damageable,
+    Has<crate::behaviors::EnemyTag>,
+    Option<&'static crate::enemy::Enemy>,
+)>;
+
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (
@@ -15,13 +31,7 @@ impl Plugin for CombatPlugin {
 fn apply_contact_damage(
     mut commands: Commands,
     damage_dealers: Query<(Entity, &Transform, &Sprite, &crate::behaviors::DamageOnContact)>,
-    mut damageables: Query<(
-        &Transform,
-        &Sprite,
-        &mut crate::behaviors::Damageable,
-        Has<crate::behaviors::EnemyTag>,
-        Has<crate::behaviors::PlayerTag>,
-    )>,
+    mut damageables: DamageableQuery,
     time: Res<Time<Virtual>>,
 ) {
     use crate::behaviors::*;
@@ -68,13 +78,7 @@ fn apply_contact_damage(
 // Generic death handling
 fn handle_damageable_death(
     mut commands: Commands,
-    query: Query<(
-        Entity,
-        &Transform,
-        &crate::behaviors::Damageable,
-        Has<crate::behaviors::EnemyTag>,
-        Option<&crate::enemy::Enemy>,
-    )>,
+    query: DeathQuery,
     health_bar_query: Query<(Entity, &crate::enemy::HealthBar)>,
 ) {
     for (entity, transform, damageable, is_enemy, enemy_data) in query.iter() {

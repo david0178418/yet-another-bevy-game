@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 pub struct PlayerPlugin;
 
+type PlayerStatsQuery<'w, 's> = Query<'w, 's, (&'static Player, &'static crate::behaviors::Damageable), Or<(Changed<Player>, Changed<crate::behaviors::Damageable>)>>;
+
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (
@@ -275,7 +277,7 @@ fn player_jump(
 }
 
 fn update_player_stats_display(
-    player_query: Query<(&Player, &crate::behaviors::Damageable), Or<(Changed<Player>, Changed<crate::behaviors::Damageable>)>>,
+    player_query: PlayerStatsQuery,
     mut text_query: Query<&mut Text, With<PlayerStatsText>>,
 ) {
     if let Ok((player, damageable)) = player_query.single() {

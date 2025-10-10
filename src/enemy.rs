@@ -4,6 +4,9 @@ use serde::Deserialize;
 
 pub struct EnemyPlugin;
 
+type HealthBarBgQuery<'w, 's> = Query<'w, 's, (&'static HealthBar, &'static mut Transform), (With<HealthBarBackground>, Without<crate::behaviors::EnemyTag>)>;
+type HealthBarFgQuery<'w, 's> = Query<'w, 's, (&'static HealthBar, &'static mut Transform, &'static mut Sprite, &'static HealthBarForeground), (Without<HealthBarBackground>, Without<crate::behaviors::EnemyTag>)>;
+
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<EnemyData>()
@@ -248,8 +251,8 @@ fn update_wave(
 
 fn update_health_bars(
     enemy_query: Query<(Entity, &Transform, &crate::behaviors::Damageable, &Sprite), With<crate::behaviors::EnemyTag>>,
-    mut health_bar_bg_query: Query<(&HealthBar, &mut Transform), (With<HealthBarBackground>, Without<crate::behaviors::EnemyTag>)>,
-    mut health_bar_fg_query: Query<(&HealthBar, &mut Transform, &mut Sprite, &HealthBarForeground), (Without<HealthBarBackground>, Without<crate::behaviors::EnemyTag>)>,
+    mut health_bar_bg_query: HealthBarBgQuery,
+    mut health_bar_fg_query: HealthBarFgQuery,
 ) {
     // Update background positions
     for (health_bar, mut bar_transform) in health_bar_bg_query.iter_mut() {

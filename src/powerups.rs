@@ -1,18 +1,31 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, ecs::system::SystemParam};
 use rand::seq::SliceRandom;
 
 pub struct PowerupsPlugin;
 
+#[derive(SystemParam)]
+struct WeaponResources<'w> {
+	registry: Option<Res<'w, crate::weapons::WeaponRegistry>>,
+	assets: Res<'w, Assets<crate::weapons::WeaponData>>,
+}
+
+#[derive(SystemParam)]
+struct PowerupUIState<'w, 's> {
+	state: ResMut<'w, PowerupState>,
+	ui_query: Query<'w, 's, Entity, With<PowerupUIContainer>>,
+	time: ResMut<'w, Time<Virtual>>,
+}
+
 fn get_powerup_name(
 	powerup: &crate::PowerupDefinition,
-	weapon_registry: Option<&crate::weapons::WeaponRegistry>,
-	weapon_assets: &Assets<crate::weapons::WeaponData>,
+	weapon_resources: &WeaponResources,
 ) -> String {
 	match powerup {
 		crate::PowerupDefinition::Weapon(id) => {
-			weapon_registry
+			weapon_resources.registry
+				.as_ref()
 				.and_then(|r| r.get(id))
-				.and_then(|h| weapon_assets.get(h))
+				.and_then(|h| weapon_resources.assets.get(h))
 				.map(|w| w.name.clone())
 				.unwrap_or_else(|| id.clone())
 		}
@@ -22,14 +35,14 @@ fn get_powerup_name(
 
 fn get_powerup_description(
 	powerup: &crate::PowerupDefinition,
-	weapon_registry: Option<&crate::weapons::WeaponRegistry>,
-	weapon_assets: &Assets<crate::weapons::WeaponData>,
+	weapon_resources: &WeaponResources,
 ) -> String {
 	match powerup {
 		crate::PowerupDefinition::Weapon(id) => {
-			weapon_registry
+			weapon_resources.registry
+				.as_ref()
 				.and_then(|r| r.get(id))
-				.and_then(|h| weapon_assets.get(h))
+				.and_then(|h| weapon_resources.assets.get(h))
 				.map(|w| w.description.clone())
 				.unwrap_or_else(|| format!("Unknown weapon: {}", id))
 		}
@@ -70,14 +83,13 @@ fn apply_powerup(
 	commands: &mut Commands,
 	player: &mut crate::player::Player,
 	player_damageable: &mut crate::behaviors::Damageable,
-	weapon_registry: Option<&crate::weapons::WeaponRegistry>,
-	weapon_data_assets: &Assets<crate::weapons::WeaponData>,
+	weapon_resources: &WeaponResources,
 ) {
 	match powerup_def {
 		crate::PowerupDefinition::Weapon(weapon_id) => {
-			if let Some(registry) = weapon_registry {
+			if let Some(registry) = weapon_resources.registry.as_ref() {
 				if let Some(handle) = registry.get(weapon_id) {
-					if let Some(weapon_data) = weapon_data_assets.get(handle) {
+					if let Some(weapon_data) = weapon_resources.assets.get(handle) {
 						crate::weapons::spawn_entity_from_data(commands, weapon_data, 1);
 					}
 				}
@@ -102,16 +114,14 @@ fn apply_powerup(
 
 fn cleanup_powerup_ui(
 	commands: &mut Commands,
-	ui_query: &Query<Entity, With<PowerupUIContainer>>,
-	powerup_state: &mut PowerupState,
-	time: &mut Time<Virtual>,
+	ui_state: &mut PowerupUIState,
 ) {
-	for entity in ui_query.iter() {
+	for entity in ui_state.ui_query.iter() {
 		commands.entity(entity).despawn();
 	}
-	powerup_state.showing = false;
-	powerup_state.options.clear();
-	time.unpause();
+	ui_state.state.showing = false;
+	ui_state.state.options.clear();
+	ui_state.time.unpause();
 }
 
 fn handle_level_up(
@@ -121,8 +131,7 @@ fn handle_level_up(
     mut time: ResMut<Time<Virtual>>,
     game_config: Option<Res<crate::GameConfig>>,
     config_assets: Res<Assets<crate::GameConfigData>>,
-    weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
-    weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
+    weapon_resources: WeaponResources,
 ) {
     for _ in level_up_events.read() {
         if powerup_state.showing {
@@ -221,7 +230,7 @@ fn handle_level_up(
             }).id();
 
             let name_text = commands.spawn((
-                Text::new(get_powerup_name(powerup, weapon_registry.as_deref(), &weapon_data_assets)),
+                Text::new(get_powerup_name(powerup, &weapon_resources)),
                 TextFont {
                     font_size: crate::constants::UI_FONT_SIZE_MEDIUM,
                     ..default()
@@ -230,7 +239,7 @@ fn handle_level_up(
             )).id();
 
             let desc_text = commands.spawn((
-                Text::new(get_powerup_description(powerup, weapon_registry.as_deref(), &weapon_data_assets)),
+                Text::new(get_powerup_description(powerup, &weapon_resources)),
                 TextFont {
                     font_size: crate::constants::UI_FONT_SIZE_SMALL,
                     ..default()
@@ -255,21 +264,18 @@ fn handle_powerup_selection(
         (&PowerupButton, &Interaction, &mut BackgroundColor),
         Changed<Interaction>,
     >,
-    mut powerup_state: ResMut<PowerupState>,
-    ui_query: Query<Entity, With<PowerupUIContainer>>,
+    mut ui_state: PowerupUIState,
     mut player_query: Query<(&mut crate::player::Player, &mut crate::behaviors::Damageable), With<crate::behaviors::PlayerTag>>,
-    mut time: ResMut<Time<Virtual>>,
     gamepads: Query<&Gamepad>,
-    weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
-    weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
+    weapon_resources: WeaponResources,
 ) {
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
                 if let Ok((mut player, mut damageable)) = player_query.single_mut() {
-                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, weapon_registry.as_deref(), &weapon_data_assets);
+                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources);
                 }
-                cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
+                cleanup_powerup_ui(&mut commands, &mut ui_state);
             }
             Interaction::Hovered => {
                 *bg_color = crate::constants::POWERUP_COLOR_HOVERED.into();
@@ -281,18 +287,18 @@ fn handle_powerup_selection(
     }
 
     // Gamepad selection
-    if !powerup_state.showing {
+    if !ui_state.state.showing {
         return;
     }
 
     for gamepad in gamepads.iter() {
         if gamepad.just_pressed(GamepadButton::South) {
             for (button, _, _) in interaction_query.iter() {
-                if button.index == powerup_state.selected_index {
+                if button.index == ui_state.state.selected_index {
                     if let Ok((mut player, mut damageable)) = player_query.single_mut() {
-                        apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, weapon_registry.as_deref(), &weapon_data_assets);
+                        apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources);
                     }
-                    cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
+                    cleanup_powerup_ui(&mut commands, &mut ui_state);
                     break;
                 }
             }
@@ -301,12 +307,12 @@ fn handle_powerup_selection(
 }
 
 fn handle_powerup_navigation(
-    mut powerup_state: ResMut<PowerupState>,
+    mut ui_state: PowerupUIState,
     gamepads: Query<&Gamepad>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut button_query: Query<(&PowerupButton, &mut BackgroundColor)>,
 ) {
-    if !powerup_state.showing || powerup_state.options.is_empty() {
+    if !ui_state.state.showing || ui_state.state.options.is_empty() {
         return;
     }
 
@@ -331,20 +337,20 @@ fn handle_powerup_navigation(
     }
 
     if direction != 0 {
-        let num_options = powerup_state.options.len();
+        let num_options = ui_state.state.options.len();
         if direction < 0 {
-            powerup_state.selected_index = if powerup_state.selected_index == 0 {
+            ui_state.state.selected_index = if ui_state.state.selected_index == 0 {
                 num_options - 1
             } else {
-                powerup_state.selected_index - 1
+                ui_state.state.selected_index - 1
             };
         } else {
-            powerup_state.selected_index = (powerup_state.selected_index + 1) % num_options;
+            ui_state.state.selected_index = (ui_state.state.selected_index + 1) % num_options;
         }
 
         // Update button colors based on selection
         for (button, mut bg_color) in button_query.iter_mut() {
-            if button.index == powerup_state.selected_index {
+            if button.index == ui_state.state.selected_index {
                 *bg_color = crate::constants::POWERUP_COLOR_SELECTED.into();
             } else {
                 *bg_color = crate::constants::POWERUP_COLOR_NORMAL.into();
