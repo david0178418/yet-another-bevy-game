@@ -18,7 +18,6 @@ impl Plugin for EnemyPlugin {
                 spawn_enemies,
                 move_enemies,
                 update_wave,
-                enemy_death,
                 update_health_bars,
             ));
     }
@@ -35,9 +34,7 @@ struct WaveTimer {
 
 #[derive(Component)]
 pub struct Enemy {
-    pub health: f32,
     pub speed: f32,
-    pub damage: f32,
     pub xp_value: u32,
 }
 
@@ -117,8 +114,8 @@ fn load_enemy_definitions(mut commands: Commands, asset_server: Res<AssetServer>
 }
 
 #[derive(Component)]
-struct HealthBar {
-    enemy_entity: Entity,
+pub struct HealthBar {
+    pub enemy_entity: Entity,
 }
 
 #[derive(Component)]
@@ -166,11 +163,19 @@ fn spawn_enemies(
                 },
                 Transform::from_xyz(spawn_x, spawn_y, 0.0),
                 Enemy {
-                    health: scaled_health,
                     speed: enemy_data.speed,
-                    damage: enemy_data.damage,
                     xp_value: enemy_data.xp_value,
                 },
+                crate::behaviors::Damageable {
+                    health: scaled_health,
+                    max_health: scaled_health,
+                },
+                crate::behaviors::DamageOnContact {
+                    damage: enemy_data.damage,
+                    damage_type: crate::behaviors::DamageType::Continuous,
+                    targets: crate::behaviors::TargetFilter::Player,
+                },
+                crate::behaviors::EnemyTag,
                 crate::physics::Velocity { x: 0.0, y: 0.0 },
                 crate::physics::Grounded(false),
             )).id();
@@ -228,42 +233,10 @@ fn update_wave(
     }
 }
 
-fn enemy_death(
-    mut commands: Commands,
-    enemy_query: Query<(Entity, &Transform, &Enemy)>,
-    health_bar_query: Query<(Entity, &HealthBar)>,
-) {
-    for (entity, transform, enemy) in enemy_query.iter() {
-        if enemy.health <= 0.0 {
-            // Spawn experience orb
-            commands.spawn((
-                Sprite {
-                    color: Color::srgb(0.9, 0.7, 0.2),
-                    custom_size: Some(Vec2::new(15.0, 15.0)),
-                    ..default()
-                },
-                Transform::from_translation(transform.translation),
-                crate::experience::ExperienceOrb {
-                    value: enemy.xp_value,
-                },
-            ));
-
-            // Despawn health bars
-            for (bar_entity, health_bar) in health_bar_query.iter() {
-                if health_bar.enemy_entity == entity {
-                    commands.entity(bar_entity).despawn();
-                }
-            }
-
-            commands.entity(entity).despawn();
-        }
-    }
-}
-
 fn update_health_bars(
-    enemy_query: Query<(Entity, &Transform, &Enemy, &Sprite)>,
-    mut health_bar_bg_query: Query<(&HealthBar, &mut Transform), (With<HealthBarBackground>, Without<Enemy>)>,
-    mut health_bar_fg_query: Query<(&HealthBar, &mut Transform, &mut Sprite, &HealthBarForeground), (Without<HealthBarBackground>, Without<Enemy>)>,
+    enemy_query: Query<(Entity, &Transform, &crate::behaviors::Damageable, &Sprite), With<crate::behaviors::EnemyTag>>,
+    mut health_bar_bg_query: Query<(&HealthBar, &mut Transform), (With<HealthBarBackground>, Without<crate::behaviors::EnemyTag>)>,
+    mut health_bar_fg_query: Query<(&HealthBar, &mut Transform, &mut Sprite, &HealthBarForeground), (Without<HealthBarBackground>, Without<crate::behaviors::EnemyTag>)>,
 ) {
     // Update background positions
     for (health_bar, mut bar_transform) in health_bar_bg_query.iter_mut() {
@@ -276,9 +249,9 @@ fn update_health_bars(
 
     // Update foreground positions and scale
     for (health_bar, mut bar_transform, mut bar_sprite, bar_fg) in health_bar_fg_query.iter_mut() {
-        if let Ok((_, enemy_transform, enemy, enemy_sprite)) = enemy_query.get(health_bar.enemy_entity) {
+        if let Ok((_, enemy_transform, damageable, enemy_sprite)) = enemy_query.get(health_bar.enemy_entity) {
             let enemy_size = enemy_sprite.custom_size.unwrap_or(Vec2::ONE);
-            let health_percent = (enemy.health / bar_fg.max_health).clamp(0.0, 1.0);
+            let health_percent = (damageable.health / bar_fg.max_health).clamp(0.0, 1.0);
 
             bar_transform.translation.x = enemy_transform.translation.x;
             bar_transform.translation.y = enemy_transform.translation.y + enemy_size.y / 2.0 + 8.0;

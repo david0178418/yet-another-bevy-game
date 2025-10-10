@@ -8,6 +8,7 @@ mod weapons;
 mod experience;
 mod powerups;
 mod combat;
+mod behaviors;
 
 use player::PlayerPlugin;
 use physics::PhysicsPlugin;
@@ -52,21 +53,27 @@ pub enum PowerupDefinition {
 }
 
 impl PowerupDefinition {
-	pub fn name(&self) -> &str {
+	pub fn name<'a>(&'a self, weapon_registry: Option<&'a weapons::WeaponRegistry>, weapon_assets: &'a Assets<weapons::WeaponData>) -> &'a str {
 		match self {
-			PowerupDefinition::Weapon(id) => id,
+			PowerupDefinition::Weapon(id) => {
+				weapon_registry
+					.and_then(|r| r.get(id))
+					.and_then(|h| weapon_assets.get(h))
+					.map(|w| w.name.as_str())
+					.unwrap_or(id.as_str())
+			}
 			PowerupDefinition::StatBoost(data) => &data.name,
 		}
 	}
 
-	pub fn description(&self) -> &str {
+	pub fn description<'a>(&'a self, weapon_registry: Option<&'a weapons::WeaponRegistry>, weapon_assets: &'a Assets<weapons::WeaponData>) -> &'a str {
 		match self {
 			PowerupDefinition::Weapon(id) => {
-				match id.as_str() {
-					"orbiting_blade" => "Adds a blade that orbits around you",
-					"auto_shooter" => "Auto-fires projectiles at enemies",
-					_ => "Unknown weapon",
-				}
+				weapon_registry
+					.and_then(|r| r.get(id))
+					.and_then(|h| weapon_assets.get(h))
+					.map(|w| w.description.as_str())
+					.unwrap_or("Unknown weapon")
 			}
 			PowerupDefinition::StatBoost(data) => &data.description,
 		}

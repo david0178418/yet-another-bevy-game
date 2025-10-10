@@ -23,8 +23,6 @@ struct NeedsInitialWeapon {
 
 #[derive(Component)]
 pub struct Player {
-    pub max_health: f32,
-    pub health: f32,
     pub speed: f32,
     pub jump_force: f32,
     pub level: u32,
@@ -33,8 +31,6 @@ pub struct Player {
 impl Default for Player {
     fn default() -> Self {
         Self {
-            max_health: 100.0,
-            health: 100.0,
             speed: 200.0,
             jump_force: 400.0,
             level: 1,
@@ -177,6 +173,11 @@ fn spawn_player(
 		},
 		Transform::from_translation(PLAYER_SPAWN),
 		Player::default(),
+		crate::behaviors::PlayerTag,
+		crate::behaviors::Damageable {
+			health: 100.0,
+			max_health: 100.0,
+		},
 		crate::physics::Velocity { x: 0.0, y: 0.0 },
 		crate::physics::Grounded(false),
 		NeedsInitialWeapon {
@@ -192,7 +193,6 @@ fn spawn_player(
 fn spawn_initial_weapon(
 	mut commands: Commands,
 	mut player_query: Query<(Entity, &NeedsInitialWeapon)>,
-	mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
 	weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
 	weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
 ) {
@@ -201,11 +201,10 @@ fn spawn_initial_weapon(
 	for (entity, needs_weapon) in player_query.iter_mut() {
 		if let Some(handle) = registry.get(&needs_weapon.weapon_id) {
 			if let Some(weapon_data) = weapon_data_assets.get(handle) {
-				crate::weapons::spawn_weapon_from_data(
+				crate::weapons::spawn_entity_from_data(
 					&mut commands,
 					weapon_data,
 					needs_weapon.count,
-					&mut blade_query,
 				);
 				commands.entity(entity).remove::<NeedsInitialWeapon>();
 			}
@@ -278,14 +277,14 @@ fn player_jump(
 }
 
 fn update_player_stats_display(
-    player_query: Query<&Player, Changed<Player>>,
+    player_query: Query<(&Player, &crate::behaviors::Damageable), Or<(Changed<Player>, Changed<crate::behaviors::Damageable>)>>,
     mut text_query: Query<&mut Text, With<PlayerStatsText>>,
 ) {
-    if let Ok(player) = player_query.single() {
+    if let Ok((player, damageable)) = player_query.single() {
         if let Ok(mut text) = text_query.single_mut() {
             **text = format!(
                 "Health: {:.0}/{:.0} | Level: {}",
-                player.health, player.max_health, player.level
+                damageable.health, damageable.max_health, player.level
             );
         }
     }

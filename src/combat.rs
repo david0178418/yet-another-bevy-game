@@ -5,81 +5,105 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (
-            blade_damage_enemies,
-            projectile_damage_enemies,
-            enemy_damage_player,
+            apply_contact_damage,
+            handle_damageable_death,
         ));
     }
 }
 
-fn blade_damage_enemies(
-    mut enemy_query: Query<(&mut crate::enemy::Enemy, &Transform, &Sprite)>,
-    blade_query: Query<(&Transform, &Sprite, &crate::weapons::OrbitingBlade)>,
-    time: Res<Time<Virtual>>,
-) {
-    for (blade_transform, blade_sprite, blade) in blade_query.iter() {
-        let blade_size = blade_sprite.custom_size.unwrap_or(Vec2::ONE);
-
-        for (mut enemy, enemy_transform, enemy_sprite) in enemy_query.iter_mut() {
-            let enemy_size = enemy_sprite.custom_size.unwrap_or(Vec2::ONE);
-
-            if check_collision(
-                blade_transform.translation,
-                blade_size,
-                enemy_transform.translation,
-                enemy_size,
-            ) {
-                enemy.health -= blade.damage * time.delta_secs();
-            }
-        }
-    }
-}
-
-fn projectile_damage_enemies(
+// Generic damage-on-contact system
+fn apply_contact_damage(
     mut commands: Commands,
-    mut enemy_query: Query<(&mut crate::enemy::Enemy, &Transform, &Sprite)>,
-    projectile_query: Query<(Entity, &Transform, &Sprite, &crate::weapons::Projectile)>,
+    damage_dealers: Query<(Entity, &Transform, &Sprite, &crate::behaviors::DamageOnContact)>,
+    mut damageables: Query<(
+        &Transform,
+        &Sprite,
+        &mut crate::behaviors::Damageable,
+        Has<crate::behaviors::EnemyTag>,
+        Has<crate::behaviors::PlayerTag>,
+    )>,
+    time: Res<Time<Virtual>>,
 ) {
-    for (projectile_entity, projectile_transform, projectile_sprite, projectile) in projectile_query.iter() {
-        let projectile_size = projectile_sprite.custom_size.unwrap_or(Vec2::ONE);
+    use crate::behaviors::*;
 
-        for (mut enemy, enemy_transform, enemy_sprite) in enemy_query.iter_mut() {
-            let enemy_size = enemy_sprite.custom_size.unwrap_or(Vec2::ONE);
+    for (dealer_entity, dealer_transform, dealer_sprite, damage_on_contact) in damage_dealers.iter() {
+        let dealer_size = dealer_sprite.custom_size.unwrap_or(Vec2::ONE);
+
+        for (target_transform, target_sprite, mut damageable, is_enemy, is_player) in damageables.iter_mut() {
+            // Check if target matches the damage filter
+            let target_matches = match damage_on_contact.targets {
+                TargetFilter::Enemies => is_enemy,
+                TargetFilter::Player => is_player,
+                TargetFilter::All => true,
+            };
+
+            if !target_matches {
+                continue;
+            }
+
+            let target_size = target_sprite.custom_size.unwrap_or(Vec2::ONE);
 
             if check_collision(
-                projectile_transform.translation,
-                projectile_size,
-                enemy_transform.translation,
-                enemy_size,
+                dealer_transform.translation,
+                dealer_size,
+                target_transform.translation,
+                target_size,
             ) {
-                enemy.health -= projectile.damage;
-                commands.entity(projectile_entity).despawn();
-                break; // Projectile can only hit one enemy
+                match damage_on_contact.damage_type {
+                    DamageType::Continuous => {
+                        damageable.health -= damage_on_contact.damage * time.delta_secs();
+                    }
+                    DamageType::OneTime => {
+                        damageable.health -= damage_on_contact.damage;
+                        // Despawn one-time damage dealers (like projectiles)
+                        commands.entity(dealer_entity).despawn();
+                        break; // Stop after first hit
+                    }
+                }
             }
         }
     }
 }
 
-fn enemy_damage_player(
-    mut player_query: Query<(&mut crate::player::Player, &Transform, &Sprite)>,
-    enemy_query: Query<(&crate::enemy::Enemy, &Transform, &Sprite)>,
-    time: Res<Time<Virtual>>,
+// Generic death handling
+fn handle_damageable_death(
+    mut commands: Commands,
+    query: Query<(
+        Entity,
+        &Transform,
+        &crate::behaviors::Damageable,
+        Has<crate::behaviors::EnemyTag>,
+        Option<&crate::enemy::Enemy>,
+    )>,
+    health_bar_query: Query<(Entity, &crate::enemy::HealthBar)>,
 ) {
-    if let Ok((mut player, player_transform, player_sprite)) = player_query.single_mut() {
-        let player_size = player_sprite.custom_size.unwrap_or(Vec2::ONE);
+    for (entity, transform, damageable, is_enemy, enemy_data) in query.iter() {
+        if damageable.health <= 0.0 {
+            // If it's an enemy, spawn XP orb
+            if is_enemy {
+                if let Some(enemy) = enemy_data {
+                    commands.spawn((
+                        Sprite {
+                            color: Color::srgb(0.9, 0.7, 0.2),
+                            custom_size: Some(Vec2::new(15.0, 15.0)),
+                            ..default()
+                        },
+                        Transform::from_translation(transform.translation),
+                        crate::experience::ExperienceOrb {
+                            value: enemy.xp_value,
+                        },
+                    ));
 
-        for (enemy, enemy_transform, enemy_sprite) in enemy_query.iter() {
-            let enemy_size = enemy_sprite.custom_size.unwrap_or(Vec2::ONE);
-
-            if check_collision(
-                player_transform.translation,
-                player_size,
-                enemy_transform.translation,
-                enemy_size,
-            ) {
-                player.health -= enemy.damage * time.delta_secs();
-                player.health = player.health.max(0.0);
+                    // Despawn health bars
+                    for (bar_entity, health_bar) in health_bar_query.iter() {
+                        if health_bar.enemy_entity == entity {
+                            commands.entity(bar_entity).despawn();
+                        }
+                    }
+                }
             }
+
+            commands.entity(entity).despawn();
         }
     }
 }

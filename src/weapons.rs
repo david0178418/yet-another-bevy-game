@@ -1,38 +1,24 @@
 use bevy::{prelude::*, asset::AssetLoader};
 use std::f32::consts::PI;
 use serde::Deserialize;
+use crate::behaviors::BehaviorData;
 
 pub struct WeaponsPlugin;
 
-// Data-driven weapon definitions
+// Visual data for weapons
 #[derive(Deserialize, Clone)]
-pub struct OrbitingBladeData {
-	pub radius: f32,
-	pub speed: f32,
-	pub damage: f32,
+pub struct VisualData {
 	pub size: (f32, f32),
 	pub color: (f32, f32, f32),
 }
 
-#[derive(Deserialize, Clone)]
-pub struct AutoShooterData {
-	pub cooldown: f32,
-	pub damage: f32,
-	pub projectile_speed: f32,
-	pub projectile_size: (f32, f32),
-	pub projectile_color: (f32, f32, f32),
-	pub projectile_lifetime: f32,
-}
-
-#[derive(Deserialize, Clone)]
-pub enum WeaponTypeData {
-	OrbitingBlade(OrbitingBladeData),
-	AutoShooter(AutoShooterData),
-}
-
+// Generic weapon data structure
 #[derive(Asset, TypePath, Deserialize, Clone)]
 pub struct WeaponData {
-	pub weapon_type: WeaponTypeData,
+	pub name: String,
+	pub description: String,
+	pub visual: VisualData,
+	pub behaviors: Vec<BehaviorData>,
 }
 
 #[derive(Default)]
@@ -72,15 +58,20 @@ impl WeaponRegistry {
 	}
 }
 
+#[derive(Resource, Default)]
+struct OrbitingEntityCount(usize);
+
 impl Plugin for WeaponsPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<WeaponData>()
             .init_asset_loader::<WeaponDataLoader>()
+            .init_resource::<OrbitingEntityCount>()
             .add_systems(Startup, load_weapon_definitions)
             .add_systems(Update, (
-                update_orbiting_blade,
-                update_auto_shooter,
-                move_projectiles,
+                redistribute_orbiting_entities,
+                update_orbiting_entities,
+                update_projectile_spawners,
+                update_despawn_timers,
             ));
     }
 }
@@ -99,175 +90,185 @@ fn load_weapon_definitions(mut commands: Commands, asset_server: Res<AssetServer
 	commands.insert_resource(WeaponRegistry { weapons });
 }
 
-#[derive(Component)]
-pub struct OrbitingBlade {
-    pub angle: f32,
-    pub radius: f32,
-    pub speed: f32,
-    pub damage: f32,
-}
-
-#[derive(Component)]
-pub struct AutoShooter {
-    pub cooldown: Timer,
-    pub damage: f32,
-    pub projectile_speed: f32,
-}
-
-#[derive(Component, Clone)]
-pub struct AutoShooterConfig {
-	pub projectile_size: (f32, f32),
-	pub projectile_color: (f32, f32, f32),
-	pub projectile_lifetime: f32,
-}
-
-#[derive(Component)]
-pub struct Projectile {
-    pub damage: f32,
-    pub lifetime: Timer,
-}
-
-pub fn spawn_weapon_from_data(
+// Generic spawn function that creates entities from weapon data
+pub fn spawn_entity_from_data(
     commands: &mut Commands,
     weapon_data: &WeaponData,
     count: u32,
-    blade_query: &mut Query<&mut OrbitingBlade>,
 ) {
-    match &weapon_data.weapon_type {
-        WeaponTypeData::OrbitingBlade(blade_data) => {
-            spawn_orbiting_blade_from_data(commands, blade_data, count, blade_query);
-        }
-        WeaponTypeData::AutoShooter(shooter_data) => {
-            spawn_auto_shooter_from_data(commands, shooter_data);
-        }
-    }
+	use crate::behaviors::*;
+
+	for _ in 0..count {
+		let mut entity_commands = commands.spawn((
+			Sprite {
+				color: Color::srgb(
+					weapon_data.visual.color.0,
+					weapon_data.visual.color.1,
+					weapon_data.visual.color.2,
+				),
+				custom_size: Some(Vec2::new(
+					weapon_data.visual.size.0,
+					weapon_data.visual.size.1,
+				)),
+				..default()
+			},
+			Transform::from_xyz(0.0, 0.0, 1.0),
+		));
+
+		// Add components based on behaviors
+		for behavior in &weapon_data.behaviors {
+			match behavior {
+				BehaviorData::Orbiting { radius, speed } => {
+					entity_commands.insert(OrbitingBehavior {
+						radius: *radius,
+						speed: *speed,
+						angle: 0.0, // Will be set by redistribution
+					});
+				}
+				BehaviorData::DamageOnContact { damage, damage_type, targets } => {
+					entity_commands.insert(DamageOnContact {
+						damage: *damage,
+						damage_type: *damage_type,
+						targets: *targets,
+					});
+				}
+				BehaviorData::ProjectileSpawner {
+					cooldown,
+					damage,
+					speed,
+					lifetime,
+					projectile_size,
+					projectile_color,
+					spawn_logic,
+				} => {
+					entity_commands.insert(ProjectileSpawner {
+						cooldown: Timer::from_seconds(*cooldown, TimerMode::Repeating),
+						projectile_template: ProjectileTemplate {
+							damage: *damage,
+							speed: *speed,
+							lifetime: *lifetime,
+							size: *projectile_size,
+							color: *projectile_color,
+						},
+						spawn_logic: spawn_logic.clone(),
+					});
+				}
+				BehaviorData::FollowPlayer => {
+					entity_commands.insert(FollowPlayer);
+				}
+			}
+		}
+	}
 }
 
-fn spawn_orbiting_blade_from_data(
-    commands: &mut Commands,
-    blade_data: &OrbitingBladeData,
-    count: u32,
-    blade_query: &mut Query<&mut OrbitingBlade>,
-) {
-
-    let existing_count = blade_query.iter().count();
-    let total_count = existing_count + count as usize;
-
-    // Redistribute existing blades
-    for (index, mut blade) in blade_query.iter_mut().enumerate() {
-        blade.angle = (index as f32 / total_count as f32) * 2.0 * PI;
-    }
-
-    // Spawn new blades with evenly distributed angles
-    for i in 0..count {
-        let blade_index = existing_count + i as usize;
-        commands.spawn((
-            Sprite {
-                color: Color::srgb(blade_data.color.0, blade_data.color.1, blade_data.color.2),
-                custom_size: Some(Vec2::new(blade_data.size.0, blade_data.size.1)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, 0.0, 1.0),
-            OrbitingBlade {
-                angle: (blade_index as f32 / total_count as f32) * 2.0 * PI,
-                radius: blade_data.radius,
-                speed: blade_data.speed,
-                damage: blade_data.damage,
-            },
-        ));
-    }
-}
-
-fn spawn_auto_shooter_from_data(
-    commands: &mut Commands,
-    shooter_data: &AutoShooterData,
-) {
-    commands.spawn((
-        AutoShooter {
-            cooldown: Timer::from_seconds(shooter_data.cooldown, TimerMode::Repeating),
-            damage: shooter_data.damage,
-            projectile_speed: shooter_data.projectile_speed,
-        },
-        AutoShooterConfig {
-            projectile_size: shooter_data.projectile_size,
-            projectile_color: shooter_data.projectile_color,
-            projectile_lifetime: shooter_data.projectile_lifetime,
-        },
-    ));
-}
-
-fn update_orbiting_blade(
-    mut blade_query: Query<(&mut Transform, &mut OrbitingBlade)>,
-    player_query: Query<&Transform, (With<crate::player::Player>, Without<OrbitingBlade>)>,
+// Generic update system for orbiting entities
+fn update_orbiting_entities(
+    mut orbiting_query: Query<(&mut Transform, &mut crate::behaviors::OrbitingBehavior, &crate::behaviors::FollowPlayer)>,
+    player_query: Query<&Transform, (With<crate::behaviors::PlayerTag>, Without<crate::behaviors::OrbitingBehavior>)>,
     time: Res<Time<Virtual>>,
 ) {
     if let Ok(player_transform) = player_query.single() {
-        for (mut blade_transform, mut blade) in blade_query.iter_mut() {
-            blade.angle += blade.speed * time.delta_secs();
+		for (mut transform, mut behavior, _) in orbiting_query.iter_mut() {
+			// Rotate based on speed
+			behavior.angle += behavior.speed * time.delta_secs();
 
-            blade_transform.translation.x = player_transform.translation.x + blade.angle.cos() * blade.radius;
-            blade_transform.translation.y = player_transform.translation.y + blade.angle.sin() * blade.radius;
-            blade_transform.rotation = Quat::from_rotation_z(blade.angle + PI / 2.0);
-        }
+			// Update position relative to player
+			transform.translation.x = player_transform.translation.x + behavior.angle.cos() * behavior.radius;
+			transform.translation.y = player_transform.translation.y + behavior.angle.sin() * behavior.radius;
+			transform.rotation = Quat::from_rotation_z(behavior.angle + PI / 2.0);
+		}
     }
 }
 
-fn update_auto_shooter(
+// System to redistribute orbiting entities when new ones are added
+fn redistribute_orbiting_entities(
+	mut all_orbiting: Query<&mut crate::behaviors::OrbitingBehavior, With<crate::behaviors::FollowPlayer>>,
+	mut count_tracker: ResMut<OrbitingEntityCount>,
+) {
+	let current_count = all_orbiting.iter().count();
+
+	// Only redistribute if count changed (new entities added or removed)
+	if current_count != count_tracker.0 {
+		count_tracker.0 = current_count;
+
+		// Redistribute all entities evenly
+		for (index, mut behavior) in all_orbiting.iter_mut().enumerate() {
+			behavior.angle = (index as f32 / current_count as f32) * 2.0 * PI;
+		}
+	}
+}
+
+// Generic update system for projectile spawners
+fn update_projectile_spawners(
     mut commands: Commands,
-    mut shooter_query: Query<(&mut AutoShooter, &AutoShooterConfig)>,
-    player_query: Query<&Transform, With<crate::player::Player>>,
-    enemy_query: Query<&Transform, With<crate::enemy::Enemy>>,
+    mut spawner_query: Query<(&mut crate::behaviors::ProjectileSpawner, &crate::behaviors::FollowPlayer)>,
+    player_query: Query<&Transform, With<crate::behaviors::PlayerTag>>,
+    enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
     time: Res<Time<Virtual>>,
 ) {
+    use crate::behaviors::*;
 
     if let Ok(player_transform) = player_query.single() {
-        for (mut shooter, config) in shooter_query.iter_mut() {
-            if shooter.cooldown.tick(time.delta()).just_finished() {
-                // Find nearest enemy
-                let mut nearest_distance = f32::MAX;
-                let mut nearest_direction = 1.0;
-
-                for enemy_transform in enemy_query.iter() {
-                    let distance = player_transform.translation.distance(enemy_transform.translation);
-                    if distance < nearest_distance {
-                        nearest_distance = distance;
-                        nearest_direction = (enemy_transform.translation.x - player_transform.translation.x).signum();
+        for (mut spawner, _) in spawner_query.iter_mut() {
+            if spawner.cooldown.tick(time.delta()).just_finished() {
+                let spawn_direction = match &spawner.spawn_logic {
+                    SpawnLogic::NearestEnemy => {
+                        // Find nearest enemy
+                        enemy_query.iter()
+                            .min_by(|a, b| {
+                                let dist_a = player_transform.translation.distance(a.translation);
+                                let dist_b = player_transform.translation.distance(b.translation);
+                                dist_a.partial_cmp(&dist_b).unwrap()
+                            })
+                            .map(|enemy_transform| {
+                                (enemy_transform.translation.x - player_transform.translation.x).signum()
+                            })
+                            .unwrap_or(1.0)
                     }
-                }
+                    SpawnLogic::PlayerDirection => 1.0, // Could be enhanced with actual player direction
+                    SpawnLogic::Fixed(x, _y) => (*x).signum(),
+                };
 
                 // Spawn projectile
+                let template = &spawner.projectile_template;
                 commands.spawn((
                     Sprite {
-                        color: Color::srgb(config.projectile_color.0, config.projectile_color.1, config.projectile_color.2),
-                        custom_size: Some(Vec2::new(config.projectile_size.0, config.projectile_size.1)),
+                        color: Color::srgb(template.color.0, template.color.1, template.color.2),
+                        custom_size: Some(Vec2::new(template.size.0, template.size.1)),
                         ..default()
                     },
                     Transform::from_xyz(
-                        player_transform.translation.x + nearest_direction * 30.0,
+                        player_transform.translation.x + spawn_direction * 30.0,
                         player_transform.translation.y,
                         0.0,
                     ),
                     crate::physics::Velocity {
-                        x: nearest_direction * shooter.projectile_speed,
+                        x: spawn_direction * template.speed,
                         y: 0.0,
                     },
-                    Projectile {
-                        damage: shooter.damage,
-                        lifetime: Timer::from_seconds(config.projectile_lifetime, TimerMode::Once),
+                    DamageOnContact {
+                        damage: template.damage,
+                        damage_type: DamageType::OneTime,
+                        targets: TargetFilter::Enemies,
                     },
+                    DespawnOnTimer {
+                        timer: Timer::from_seconds(template.lifetime, TimerMode::Once),
+                    },
+                    ProjectileTag,
                 ));
             }
         }
     }
 }
 
-fn move_projectiles(
+// Generic despawn timer system
+fn update_despawn_timers(
     mut commands: Commands,
-    mut projectile_query: Query<(Entity, &mut Projectile)>,
+    mut query: Query<(Entity, &mut crate::behaviors::DespawnOnTimer)>,
     time: Res<Time<Virtual>>,
 ) {
-    for (entity, mut projectile) in projectile_query.iter_mut() {
-        if projectile.lifetime.tick(time.delta()).just_finished() {
+    for (entity, mut despawn_timer) in query.iter_mut() {
+        if despawn_timer.timer.tick(time.delta()).just_finished() {
             commands.entity(entity).despawn();
         }
     }

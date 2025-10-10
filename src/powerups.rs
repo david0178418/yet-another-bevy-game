@@ -35,7 +35,7 @@ fn apply_powerup(
 	powerup_def: &crate::PowerupDefinition,
 	commands: &mut Commands,
 	player: &mut crate::player::Player,
-	blade_query: &mut Query<&mut crate::weapons::OrbitingBlade>,
+	player_damageable: &mut crate::behaviors::Damageable,
 	weapon_registry: Option<&crate::weapons::WeaponRegistry>,
 	weapon_data_assets: &Assets<crate::weapons::WeaponData>,
 ) {
@@ -44,7 +44,7 @@ fn apply_powerup(
 			if let Some(registry) = weapon_registry {
 				if let Some(handle) = registry.get(weapon_id) {
 					if let Some(weapon_data) = weapon_data_assets.get(handle) {
-						crate::weapons::spawn_weapon_from_data(commands, weapon_data, 1, blade_query);
+						crate::weapons::spawn_entity_from_data(commands, weapon_data, 1);
 					}
 				}
 			}
@@ -58,8 +58,8 @@ fn apply_powerup(
 					player.jump_force += boost.value;
 				}
 				crate::StatType::MaxHealth => {
-					player.max_health += boost.value;
-					player.health = player.max_health;
+					player_damageable.max_health += boost.value;
+					player_damageable.health = player_damageable.max_health;
 				}
 			}
 		}
@@ -87,6 +87,8 @@ fn handle_level_up(
     mut time: ResMut<Time<Virtual>>,
     game_config: Option<Res<crate::GameConfig>>,
     config_assets: Res<Assets<crate::GameConfigData>>,
+    weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
+    weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
 ) {
     for _ in level_up_events.read() {
         if powerup_state.showing {
@@ -185,7 +187,7 @@ fn handle_level_up(
             }).id();
 
             let name_text = commands.spawn((
-                Text::new(powerup.name()),
+                Text::new(powerup.name(weapon_registry.as_deref(), &weapon_data_assets)),
                 TextFont {
                     font_size: 24.0,
                     ..default()
@@ -194,7 +196,7 @@ fn handle_level_up(
             )).id();
 
             let desc_text = commands.spawn((
-                Text::new(powerup.description()),
+                Text::new(powerup.description(weapon_registry.as_deref(), &weapon_data_assets)),
                 TextFont {
                     font_size: 16.0,
                     ..default()
@@ -221,18 +223,17 @@ fn handle_powerup_selection(
     >,
     mut powerup_state: ResMut<PowerupState>,
     ui_query: Query<Entity, With<PowerupUIContainer>>,
-    mut player_query: Query<(Entity, &mut crate::player::Player)>,
+    mut player_query: Query<(&mut crate::player::Player, &mut crate::behaviors::Damageable), With<crate::behaviors::PlayerTag>>,
     mut time: ResMut<Time<Virtual>>,
     gamepads: Query<&Gamepad>,
-    mut blade_query: Query<&mut crate::weapons::OrbitingBlade>,
     weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
     weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
 ) {
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                if let Ok((_, mut player)) = player_query.single_mut() {
-                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut blade_query, weapon_registry.as_deref(), &weapon_data_assets);
+                if let Ok((mut player, mut damageable)) = player_query.single_mut() {
+                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, weapon_registry.as_deref(), &weapon_data_assets);
                 }
                 cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
             }
@@ -254,8 +255,8 @@ fn handle_powerup_selection(
         if gamepad.just_pressed(GamepadButton::South) {
             for (button, _, _) in interaction_query.iter() {
                 if button.index == powerup_state.selected_index {
-                    if let Ok((_, mut player)) = player_query.single_mut() {
-                        apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut blade_query, weapon_registry.as_deref(), &weapon_data_assets);
+                    if let Ok((mut player, mut damageable)) = player_query.single_mut() {
+                        apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, weapon_registry.as_deref(), &weapon_data_assets);
                     }
                     cleanup_powerup_ui(&mut commands, &ui_query, &mut powerup_state, &mut time);
                     break;

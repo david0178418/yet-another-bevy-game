@@ -1,10 +1,20 @@
 (
-	weapon_type: AutoShooter((
-		cooldown: 1.5,
-		damage: 250.0,
-		projectile_speed: 300.0,
-		projectile_size: (15.0, 8.0),
-		projectile_color: (0.9, 0.9, 0.3),
-		projectile_lifetime: 3.0,
-	)),
+	name: "Auto Shooter",
+	description: "Auto-fires projectiles at enemies",
+	visual: (
+		size: (0.0, 0.0),  // Invisible
+		color: (0.0, 0.0, 0.0),
+	),
+	behaviors: [
+		FollowPlayer,
+		ProjectileSpawner(
+			cooldown: 1.5,
+			damage: 250.0,
+			speed: 300.0,
+			lifetime: 3.0,
+			projectile_size: (15.0, 8.0),
+			projectile_color: (0.9, 0.9, 0.3),
+			spawn_logic: NearestEnemy,
+		),
+	],
 )
