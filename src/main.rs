@@ -1,4 +1,4 @@
-use bevy::{prelude::*, ui::UiScale, window::{WindowResized, WindowResolution}, asset::AssetLoader, camera::{Viewport, ScalingMode}};
+use bevy::{prelude::*, ui::UiScale, window::{WindowResized, WindowResolution, PresentMode}, asset::AssetLoader, camera::{Viewport, ScalingMode}};
 use serde::Deserialize;
 
 mod player;
@@ -99,6 +99,7 @@ fn main() {
 			primary_window: Some(Window {
 				title: "Vampire Survivors Platformer".to_string(),
 				resolution: WindowResolution::new(1280, 720),
+				present_mode: PresentMode::AutoNoVsync,
 				resizable: true,
 				..default()
 			}),

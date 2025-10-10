@@ -2,13 +2,16 @@ use bevy::prelude::*;
 
 pub struct PhysicsPlugin;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PhysicsSet;
+
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (
             apply_gravity,
             apply_velocity,
             check_ground_collision,
-        ).chain());
+        ).chain().in_set(PhysicsSet));
     }
 }
 

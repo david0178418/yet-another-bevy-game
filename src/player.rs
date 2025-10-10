@@ -7,10 +7,13 @@ type PlayerStatsQuery<'w, 's> = Query<'w, 's, (&'static Player, &'static crate::
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (
-                spawn_player,
-                spawn_initial_weapon,
+                // Process input before physics for minimal latency
                 player_movement,
                 player_jump,
+            ).before(crate::physics::PhysicsSet))
+            .add_systems(Update, (
+                spawn_player,
+                spawn_initial_weapon,
                 update_player_stats_display,
                 update_xp_bar,
             ));
@@ -219,7 +222,7 @@ fn player_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut query: Query<(&mut crate::physics::Velocity, &Player)>,
-    time: Res<Time<Virtual>>,
+    time: Res<Time>,  // Use real time for input, not virtual (paused) time
 ) {
     for (mut velocity, player) in query.iter_mut() {
         let mut direction = 0.0;
