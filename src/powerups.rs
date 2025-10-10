@@ -264,11 +264,14 @@ fn handle_powerup_selection(
         (&PowerupButton, &Interaction, &mut BackgroundColor),
         Changed<Interaction>,
     >,
+    button_query: Query<&PowerupButton>,
     mut ui_state: PowerupUIState,
     mut player_query: Query<(&mut crate::player::Player, &mut crate::behaviors::Damageable), With<crate::behaviors::PlayerTag>>,
     gamepads: Query<&Gamepad>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     weapon_resources: WeaponResources,
 ) {
+    // Handle mouse interactions
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
@@ -281,26 +284,45 @@ fn handle_powerup_selection(
                 *bg_color = crate::constants::POWERUP_COLOR_HOVERED.into();
             }
             Interaction::None => {
-                *bg_color = crate::constants::POWERUP_COLOR_NORMAL.into();
+                // Keep selected button highlighted even when mouse not hovering
+                let color = if button.index == ui_state.state.selected_index {
+                    crate::constants::POWERUP_COLOR_SELECTED
+                } else {
+                    crate::constants::POWERUP_COLOR_NORMAL
+                };
+                *bg_color = color.into();
             }
         }
     }
 
-    // Gamepad selection
     if !ui_state.state.showing {
         return;
     }
 
+    // Check for confirmation input (gamepad or keyboard)
+    let mut should_confirm = false;
+
+    // Gamepad confirmation
     for gamepad in gamepads.iter() {
         if gamepad.just_pressed(GamepadButton::South) {
-            for (button, _, _) in interaction_query.iter() {
-                if button.index == ui_state.state.selected_index {
-                    if let Ok((mut player, mut damageable)) = player_query.single_mut() {
-                        apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources);
-                    }
-                    cleanup_powerup_ui(&mut commands, &mut ui_state);
-                    break;
+            should_confirm = true;
+            break;
+        }
+    }
+
+    // Keyboard confirmation
+    if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::Space) {
+        should_confirm = true;
+    }
+
+    if should_confirm {
+        for button in button_query.iter() {
+            if button.index == ui_state.state.selected_index {
+                if let Ok((mut player, mut damageable)) = player_query.single_mut() {
+                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources);
                 }
+                cleanup_powerup_ui(&mut commands, &mut ui_state);
+                break;
             }
         }
     }

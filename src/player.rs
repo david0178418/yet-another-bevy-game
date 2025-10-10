@@ -275,7 +275,13 @@ fn player_jump(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut query: Query<(&mut crate::physics::Velocity, &Player, &crate::physics::Grounded)>,
+    powerup_state: Res<crate::powerups::PowerupState>,
 ) {
+    // Don't process jump input while menu is showing
+    if powerup_state.showing {
+        return;
+    }
+
     for (mut velocity, player, grounded) in query.iter_mut() {
         let mut should_jump = false;
 
