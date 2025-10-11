@@ -65,7 +65,6 @@ struct OrbitingEntityCount(usize);
 #[derive(Component)]
 struct WeaponCooldownBar {
 	weapon_entity: Entity,
-	weapon_name: String,
 }
 
 #[derive(Component)]
@@ -201,8 +200,8 @@ pub fn spawn_entity_from_data(
 				BehaviorData::MeleeAttack {
 					cooldown,
 					detection_range,
-					dash_speed,
-					dash_distance,
+					dash_speed: _,  // Configured in data but using constant for physics
+					dash_distance: _,  // Configured in data but using constant for physics
 					shock_wave_damage,
 					shock_wave_size,
 					shock_wave_speed,
@@ -214,8 +213,6 @@ pub fn spawn_entity_from_data(
 					entity_commands.insert(MeleeAttack {
 						cooldown: timer,
 						detection_range: *detection_range,
-						dash_speed: *dash_speed,
-						dash_distance: *dash_distance,
 						shock_wave_damage: *shock_wave_damage,
 						shock_wave_size: *shock_wave_size,
 						shock_wave_speed: *shock_wave_speed,
@@ -281,7 +278,7 @@ fn update_projectile_spawners(
     if let Ok(player_transform) = player_query.single() {
         for (mut spawner, _) in spawner_query.iter_mut() {
             // Only tick if not finished (actively cooling down)
-            if !spawner.cooldown.finished() {
+            if !spawner.cooldown.is_finished() {
                 spawner.cooldown.tick(time.delta());
                 continue; // Skip to next weapon while cooling down
             }
@@ -400,7 +397,7 @@ fn detect_melee_targets(
     if let Ok((player_entity, player_transform)) = player_query.single() {
         for mut melee in melee_query.iter_mut() {
             // Only tick cooldown if it's not finished (actively cooling down)
-            if !melee.cooldown.finished() {
+            if !melee.cooldown.is_finished() {
                 melee.cooldown.tick(time.delta());
             }
 
@@ -417,7 +414,7 @@ fn detect_melee_targets(
 
             // Only attack if cooldown is ready AND there's an enemy in range
             if let Some(enemy_transform) = nearest_enemy {
-                if melee.cooldown.finished() {
+                if melee.cooldown.is_finished() {
                     melee.cooldown.reset();
 
                     // Calculate direction to enemy
@@ -426,17 +423,8 @@ fn detect_melee_targets(
                         enemy_transform.translation.y - player_transform.translation.y,
                     ).normalize();
 
-                    // Calculate target position (dash toward enemy)
-                    let target_position = Vec3::new(
-                        player_transform.translation.x + direction.x * melee.dash_distance,
-                        player_transform.translation.y + direction.y * melee.dash_distance,
-                        player_transform.translation.z,
-                    );
-
                     // Add DashState to player
                     commands.entity(player_entity).insert(DashState {
-                        target_position,
-                        start_position: player_transform.translation,
                         distance_traveled: 0.0,
                         direction,
                         shock_wave_params: ShockWaveParams {
@@ -460,7 +448,7 @@ fn execute_dash(
 ) {
     use crate::behaviors::*;
 
-    if let Ok((player_entity, mut player_transform, mut velocity, mut dash_state)) = player_query.single_mut() {
+    if let Ok((player_entity, player_transform, mut velocity, mut dash_state)) = player_query.single_mut() {
         let dash_speed = crate::constants::MELEE_DASH_SPEED;
         let delta_distance = dash_speed * time.delta_secs();
 
@@ -531,30 +519,42 @@ fn update_shock_waves(
 
 // ============ Weapon Cooldown UI Systems ============
 
+struct BarLayout {
+	width: f32,
+	height: f32,
+	start_y: f32,
+	spacing: f32,
+}
+
+type NewProjectileWeaponsQuery<'w, 's> = Query<'w, 's, (Entity, &'static WeaponName), (With<crate::behaviors::ProjectileSpawner>, Without<HasCooldownUI>)>;
+type NewMeleeWeaponsQuery<'w, 's> = Query<'w, 's, (Entity, &'static WeaponName), (With<crate::behaviors::MeleeAttack>, Without<HasCooldownUI>)>;
+
 fn spawn_weapon_cooldown_bars(
     mut commands: Commands,
-    projectile_weapons: Query<(Entity, &WeaponName), (With<crate::behaviors::ProjectileSpawner>, Without<HasCooldownUI>)>,
-    melee_weapons: Query<(Entity, &WeaponName), (With<crate::behaviors::MeleeAttack>, Without<HasCooldownUI>)>,
+    projectile_weapons: NewProjectileWeaponsQuery,
+    melee_weapons: NewMeleeWeaponsQuery,
     existing_projectile_weapons: Query<Entity, (With<crate::behaviors::ProjectileSpawner>, With<HasCooldownUI>)>,
     existing_melee_weapons: Query<Entity, (With<crate::behaviors::MeleeAttack>, With<HasCooldownUI>)>,
 ) {
-    const BAR_WIDTH: f32 = 200.0;
-    const BAR_HEIGHT: f32 = 15.0;
-    const BAR_START_Y: f32 = 10.0;
-    const BAR_SPACING: f32 = 25.0;
+    const LAYOUT: BarLayout = BarLayout {
+		width: 200.0,
+		height: 15.0,
+		start_y: 10.0,
+		spacing: 25.0,
+	};
 
     // Start bar index after existing weapons
     let mut bar_index = existing_projectile_weapons.iter().count() + existing_melee_weapons.iter().count();
 
     // Spawn bars for projectile weapons
     for (entity, weapon_name) in projectile_weapons.iter() {
-        spawn_cooldown_bar(&mut commands, entity, &weapon_name.0, bar_index, BAR_WIDTH, BAR_HEIGHT, BAR_START_Y, BAR_SPACING);
+        spawn_cooldown_bar(&mut commands, entity, &weapon_name.0, bar_index, &LAYOUT);
         bar_index += 1;
     }
 
     // Spawn bars for melee weapons
     for (entity, weapon_name) in melee_weapons.iter() {
-        spawn_cooldown_bar(&mut commands, entity, &weapon_name.0, bar_index, BAR_WIDTH, BAR_HEIGHT, BAR_START_Y, BAR_SPACING);
+        spawn_cooldown_bar(&mut commands, entity, &weapon_name.0, bar_index, &LAYOUT);
         bar_index += 1;
     }
 }
@@ -564,12 +564,9 @@ fn spawn_cooldown_bar(
     weapon_entity: Entity,
     weapon_name: &str,
     index: usize,
-    bar_width: f32,
-    bar_height: f32,
-    start_y: f32,
-    spacing: f32,
+    layout: &BarLayout,
 ) {
-    let y_position = start_y + (index as f32 * spacing);
+    let y_position = layout.start_y + (index as f32 * layout.spacing);
 
     // Mark weapon as having UI
     commands.entity(weapon_entity).insert(HasCooldownUI);
@@ -580,16 +577,13 @@ fn spawn_cooldown_bar(
             position_type: PositionType::Absolute,
             top: Val::Px(y_position),
             right: Val::Px(10.0),
-            width: Val::Px(bar_width),
-            height: Val::Px(bar_height),
+            width: Val::Px(layout.width),
+            height: Val::Px(layout.height),
             ..default()
         },
         BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
         ZIndex(10),
-        WeaponCooldownBar {
-            weapon_entity,
-            weapon_name: weapon_name.to_string(),
-        },
+        WeaponCooldownBar { weapon_entity },
         WeaponCooldownBarBackground,
     ));
 
@@ -600,15 +594,12 @@ fn spawn_cooldown_bar(
             top: Val::Px(y_position),
             right: Val::Px(10.0),
             width: Val::Px(0.0),
-            height: Val::Px(bar_height),
+            height: Val::Px(layout.height),
             ..default()
         },
         BackgroundColor(Color::srgb(0.3, 0.7, 0.3)),
         ZIndex(11),
-        WeaponCooldownBar {
-            weapon_entity,
-            weapon_name: weapon_name.to_string(),
-        },
+        WeaponCooldownBar { weapon_entity },
         WeaponCooldownBarForeground,
     ));
 
@@ -627,10 +618,7 @@ fn spawn_cooldown_bar(
             ..default()
         },
         ZIndex(12),
-        WeaponCooldownBar {
-            weapon_entity,
-            weapon_name: weapon_name.to_string(),
-        },
+        WeaponCooldownBar { weapon_entity },
         WeaponCooldownText,
     ));
 }
@@ -646,7 +634,7 @@ fn update_weapon_cooldown_bars(
         // Check if it's a projectile weapon
         if let Ok((_, spawner)) = projectile_weapons.get(bar.weapon_entity) {
             // Full bar when ready, empty when just fired, fills as it cools down
-            let readiness = if spawner.cooldown.finished() {
+            let readiness = if spawner.cooldown.is_finished() {
                 1.0
             } else {
                 spawner.cooldown.fraction()
@@ -658,7 +646,7 @@ fn update_weapon_cooldown_bars(
         // Check if it's a melee weapon
         if let Ok((_, melee)) = melee_weapons.get(bar.weapon_entity) {
             // Full bar when ready, empty when just fired, fills as it cools down
-            let readiness = if melee.cooldown.finished() {
+            let readiness = if melee.cooldown.is_finished() {
                 1.0
             } else {
                 melee.cooldown.fraction()

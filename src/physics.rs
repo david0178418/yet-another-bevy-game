@@ -43,6 +43,7 @@ pub struct Collider;
 
 type ColliderQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform, &'static Sprite), With<Collider>>;
 type GroundedQuery<'w, 's> = Query<'w, 's, (Entity, &'static mut Transform, &'static Sprite, &'static mut Velocity, &'static mut Grounded)>;
+type CollisionQuery<'w, 's> = Query<'w, 's, (&'static mut Transform, &'static Sprite), (With<Collider>, Without<Ground>)>;
 
 fn apply_gravity(
     mut query: Query<(&mut Velocity, &Grounded)>,
@@ -66,7 +67,7 @@ fn apply_velocity(
 }
 
 fn resolve_entity_collisions(
-    mut query: Query<(&mut Transform, &Sprite), (With<Collider>, Without<Ground>)>,
+    mut query: CollisionQuery,
 ) {
     let mut combinations = query.iter_combinations_mut();
 

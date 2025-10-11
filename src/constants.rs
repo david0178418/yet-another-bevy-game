@@ -84,15 +84,16 @@ pub const WEAPON_RANGE_BOOST_AMOUNT: f32 = 100.0;
 
 // ============ Melee Attack Constants ============
 
-pub const MELEE_DETECTION_RANGE: f32 = 150.0;
+// Default values for reference - actual values configured in assets/weapons/melee_punch.weapon.ron
+// pub const MELEE_DETECTION_RANGE: f32 = 150.0;
 pub const MELEE_DASH_SPEED: f32 = 800.0;
 pub const MELEE_DASH_DISTANCE: f32 = 100.0;
-pub const SHOCK_WAVE_SIZE: (f32, f32) = (80.0, 40.0);
-pub const SHOCK_WAVE_SPEED: f32 = 400.0;
-pub const SHOCK_WAVE_TRAVEL_DISTANCE: f32 = 200.0;
-pub const SHOCK_WAVE_DAMAGE: f32 = 300.0;
-pub const SHOCK_WAVE_COLOR: (f32, f32, f32) = (0.9, 0.3, 0.3);
-pub const MELEE_COOLDOWN: f32 = 2.0;
+// pub const SHOCK_WAVE_SIZE: (f32, f32) = (80.0, 40.0);
+// pub const SHOCK_WAVE_SPEED: f32 = 400.0;
+// pub const SHOCK_WAVE_TRAVEL_DISTANCE: f32 = 200.0;
+// pub const SHOCK_WAVE_DAMAGE: f32 = 300.0;
+// pub const SHOCK_WAVE_COLOR: (f32, f32, f32) = (0.9, 0.3, 0.3);
+// pub const MELEE_COOLDOWN: f32 = 2.0;
 
 // ============ Platform Constants ============
 
