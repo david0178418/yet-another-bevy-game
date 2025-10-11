@@ -200,8 +200,8 @@ pub fn spawn_entity_from_data(
 				BehaviorData::MeleeAttack {
 					cooldown,
 					detection_range,
-					dash_speed: _,  // Configured in data but using constant for physics
-					dash_distance: _,  // Configured in data but using constant for physics
+					dash_speed: _,  // Using constant MELEE_DASH_SPEED for consistent physics
+					dash_distance,
 					shock_wave_damage,
 					shock_wave_size,
 					shock_wave_speed,
@@ -213,6 +213,7 @@ pub fn spawn_entity_from_data(
 					entity_commands.insert(MeleeAttack {
 						cooldown: timer,
 						detection_range: *detection_range,
+						dash_distance: *dash_distance,
 						shock_wave_damage: *shock_wave_damage,
 						shock_wave_size: *shock_wave_size,
 						shock_wave_speed: *shock_wave_speed,
@@ -426,6 +427,7 @@ fn detect_melee_targets(
                     // Add DashState to player
                     commands.entity(player_entity).insert(DashState {
                         distance_traveled: 0.0,
+                        dash_distance: melee.dash_distance,
                         direction,
                         shock_wave_params: ShockWaveParams {
                             damage: melee.shock_wave_damage,
@@ -449,17 +451,17 @@ fn execute_dash(
     use crate::behaviors::*;
 
     if let Ok((player_entity, player_transform, mut velocity, mut dash_state)) = player_query.single_mut() {
-        let dash_speed = crate::constants::MELEE_DASH_SPEED;
-        let delta_distance = dash_speed * time.delta_secs();
+        const DASH_SPEED: f32 = crate::constants::MELEE_DASH_SPEED;
+        let delta_distance = DASH_SPEED * time.delta_secs();
 
         // Override velocity during dash
-        velocity.x = dash_state.direction.x * dash_speed;
-        velocity.y = dash_state.direction.y * dash_speed;
+        velocity.x = dash_state.direction.x * DASH_SPEED;
+        velocity.y = dash_state.direction.y * DASH_SPEED;
 
         dash_state.distance_traveled += delta_distance;
 
         // Check if dash is complete
-        if dash_state.distance_traveled >= crate::constants::MELEE_DASH_DISTANCE {
+        if dash_state.distance_traveled >= dash_state.dash_distance {
             // Spawn shock wave
             let angle = dash_state.direction.y.atan2(dash_state.direction.x);
             commands.spawn((

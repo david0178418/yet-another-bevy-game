@@ -99,6 +99,7 @@ pub enum SpawnLogic {
 pub struct MeleeAttack {
 	pub cooldown: Timer,
 	pub detection_range: f32,
+	pub dash_distance: f32,
 	pub shock_wave_damage: f32,
 	pub shock_wave_size: (f32, f32),
 	pub shock_wave_speed: f32,
@@ -109,6 +110,7 @@ pub struct MeleeAttack {
 #[derive(Component)]
 pub struct DashState {
 	pub distance_traveled: f32,
+	pub dash_distance: f32,
 	pub direction: Vec2,
 	pub shock_wave_params: ShockWaveParams,
 }
@@ -154,9 +156,8 @@ pub enum BehaviorData {
 	MeleeAttack {
 		cooldown: f32,
 		detection_range: f32,
-		#[allow(dead_code)]  // Used in data files but constants used at runtime
+		#[allow(dead_code)]  // Configured in data but constant MELEE_DASH_SPEED used for consistent physics
 		dash_speed: f32,
-		#[allow(dead_code)]  // Used in data files but constants used at runtime
 		dash_distance: f32,
 		shock_wave_damage: f32,
 		shock_wave_size: (f32, f32),
