@@ -182,3 +182,11 @@ pub struct WeaponId(pub String);
 
 #[derive(Component, Clone, Copy)]
 pub struct WeaponLevel(pub u32);
+
+// Store base values for proper upgrade calculations
+#[derive(Component, Clone, Copy)]
+pub struct BaseWeaponStats {
+	pub base_damage: f32,
+	pub base_cooldown: f32,
+	pub base_effect: f32,  // For melee: stun duration
+}

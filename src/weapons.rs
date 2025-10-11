@@ -136,46 +136,45 @@ fn initialize_weapon_registry(
 	commands.insert_resource(WeaponRegistry { weapons });
 }
 
+// Calculate stat multipliers based on level
+fn calculate_upgrade_multipliers(level: u32) -> (f32, f32, f32) {
+	use crate::constants::*;
+	let level_f = level as f32;
+
+	// Level 1 = base stats (multiplier 1.0), level 2+ = increased
+	let damage_multiplier = 1.0 + (level_f - 1.0) * WEAPON_DAMAGE_INCREASE_PER_LEVEL;
+	let cooldown_multiplier = (1.0 - (level_f - 1.0) * WEAPON_COOLDOWN_DECREASE_PER_LEVEL)
+		.max(WEAPON_MIN_COOLDOWN_MULTIPLIER);
+	let effect_multiplier = 1.0 + (level_f - 1.0) * WEAPON_EFFECT_INCREASE_PER_LEVEL;
+
+	(damage_multiplier, cooldown_multiplier, effect_multiplier)
+}
+
 // Upgrade an existing weapon by level
 pub fn upgrade_weapon(
 	commands: &mut Commands,
 	entity: Entity,
 	weapon_level: &mut crate::behaviors::WeaponLevel,
+	base_stats: &crate::behaviors::BaseWeaponStats,
 	melee_query: Option<&mut crate::behaviors::MeleeAttack>,
 	projectile_query: Option<&mut crate::behaviors::ProjectileSpawner>,
 ) {
 	weapon_level.0 += 1;
-	let level = weapon_level.0;
-
-	// Damage scaling: +20% per level
-	let damage_multiplier = 1.0 + (level as f32 - 1.0) * 0.2;
-
-	// Cooldown scaling: -10% per level (faster attacks, minimum 50% cooldown)
-	let cooldown_multiplier = (1.0 - (level as f32 - 1.0) * 0.1).max(0.5);
+	let (damage_mult, cooldown_mult, effect_mult) = calculate_upgrade_multipliers(weapon_level.0);
 
 	if let Some(melee) = melee_query {
-		// Upgrade melee weapon stats
-		let base_damage = melee.damage / (1.0 + ((level - 1) as f32 - 1.0) * 0.2); // Reverse previous scaling
-		melee.damage = base_damage * damage_multiplier;
-
-		let base_cooldown = melee.cooldown.duration().as_secs_f32() / ((1.0 - ((level - 1) as f32 - 1.0) * 0.1).max(0.5));
-		let new_cooldown = base_cooldown * cooldown_multiplier;
-		melee.cooldown.set_duration(std::time::Duration::from_secs_f32(new_cooldown));
-
-		// Stun duration increases 15% per level
-		let stun_multiplier = 1.0 + (level as f32 - 1.0) * 0.15;
-		let base_stun = melee.stun_duration / (1.0 + ((level - 1) as f32 - 1.0) * 0.15);
-		melee.stun_duration = base_stun * stun_multiplier;
+		melee.damage = base_stats.base_damage * damage_mult;
+		melee.cooldown.set_duration(std::time::Duration::from_secs_f32(
+			base_stats.base_cooldown * cooldown_mult
+		));
+		melee.stun_duration = base_stats.base_effect * effect_mult;
 	}
 
 	if let Some(projectile) = projectile_query {
-		// Upgrade projectile weapon stats
-		let base_damage = projectile.projectile_template.damage / (1.0 + ((level - 1) as f32 - 1.0) * 0.2);
-		projectile.projectile_template.damage = base_damage * damage_multiplier;
-
-		let base_cooldown = projectile.cooldown.duration().as_secs_f32() / ((1.0 - ((level - 1) as f32 - 1.0) * 0.1).max(0.5));
-		let new_cooldown = base_cooldown * cooldown_multiplier;
-		projectile.cooldown.set_duration(std::time::Duration::from_secs_f32(new_cooldown));
+		projectile.projectile_template.damage = base_stats.base_damage * damage_mult;
+		projectile.cooldown.set_duration(std::time::Duration::from_secs_f32(
+			base_stats.base_cooldown * cooldown_mult
+		));
 	}
 
 	commands.entity(entity).insert(*weapon_level);
@@ -241,18 +240,25 @@ pub fn spawn_entity_from_data(
 				} => {
 					let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
 					timer.tick(std::time::Duration::from_secs_f32(*cooldown)); // Start ready to fire
-					entity_commands.insert(ProjectileSpawner {
-						cooldown: timer,
-						projectile_template: ProjectileTemplate {
-							damage: *damage,
-							speed: *speed,
-							lifetime: *lifetime,
-							size: *projectile_size,
-							color: *projectile_color,
+					entity_commands.insert((
+						ProjectileSpawner {
+							cooldown: timer,
+							projectile_template: ProjectileTemplate {
+								damage: *damage,
+								speed: *speed,
+								lifetime: *lifetime,
+								size: *projectile_size,
+								color: *projectile_color,
+							},
+							spawn_logic: spawn_logic.clone(),
+							fire_range: *fire_range,
 						},
-						spawn_logic: spawn_logic.clone(),
-						fire_range: *fire_range,
-					});
+						BaseWeaponStats {
+							base_damage: *damage,
+							base_cooldown: *cooldown,
+							base_effect: 0.0,  // Not used for projectile weapons
+						},
+					));
 				}
 				BehaviorData::MeleeAttack {
 					cooldown,
@@ -266,16 +272,23 @@ pub fn spawn_entity_from_data(
 				} => {
 					let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
 					timer.tick(std::time::Duration::from_secs_f32(*cooldown)); // Start ready to fire
-					entity_commands.insert(MeleeAttack {
-						cooldown: timer,
-						detection_range: *detection_range,
-						damage: *damage,
-						stun_duration: *stun_duration,
-						knockback_force: *knockback_force,
-						attack_duration: *attack_duration,
-						hitbox_size: *hitbox_size,
-						hitbox_color: *hitbox_color,
-					});
+					entity_commands.insert((
+						MeleeAttack {
+							cooldown: timer,
+							detection_range: *detection_range,
+							damage: *damage,
+							stun_duration: *stun_duration,
+							knockback_force: *knockback_force,
+							attack_duration: *attack_duration,
+							hitbox_size: *hitbox_size,
+							hitbox_color: *hitbox_color,
+						},
+						BaseWeaponStats {
+							base_damage: *damage,
+							base_cooldown: *cooldown,
+							base_effect: *stun_duration,
+						},
+					));
 				}
 				BehaviorData::FollowPlayer => {
 					entity_commands.insert(FollowPlayer);

@@ -100,8 +100,8 @@ struct PowerupButton {
     index: usize,
 }
 
-type MeleeUpgradeQuery<'w, 's> = Query<'w, 's, (&'static mut crate::behaviors::MeleeAttack, &'static mut crate::behaviors::WeaponLevel), With<crate::behaviors::WeaponId>>;
-type ProjectileUpgradeQuery<'w, 's> = Query<'w, 's, (&'static mut crate::behaviors::ProjectileSpawner, &'static mut crate::behaviors::WeaponLevel), (With<crate::behaviors::WeaponId>, Without<crate::behaviors::MeleeAttack>)>;
+type MeleeUpgradeQuery<'w, 's> = Query<'w, 's, (&'static mut crate::behaviors::MeleeAttack, &'static mut crate::behaviors::WeaponLevel, &'static crate::behaviors::BaseWeaponStats), With<crate::behaviors::WeaponId>>;
+type ProjectileUpgradeQuery<'w, 's> = Query<'w, 's, (&'static mut crate::behaviors::ProjectileSpawner, &'static mut crate::behaviors::WeaponLevel, &'static crate::behaviors::BaseWeaponStats), (With<crate::behaviors::WeaponId>, Without<crate::behaviors::MeleeAttack>)>;
 
 #[allow(clippy::too_many_arguments)]
 fn apply_powerup(
@@ -122,11 +122,11 @@ fn apply_powerup(
 				let entity = *entity;
 
 				// Try to get mutable components for upgrading
-				if let Ok((mut melee, mut level)) = melee_query.get_mut(entity) {
-					crate::weapons::upgrade_weapon(commands, entity, &mut level, Some(&mut melee), None);
+				if let Ok((mut melee, mut level, base_stats)) = melee_query.get_mut(entity) {
+					crate::weapons::upgrade_weapon(commands, entity, &mut level, base_stats, Some(&mut melee), None);
 					weapon_inventory.weapons.insert(weapon_id.clone(), (entity, level.0));
-				} else if let Ok((mut projectile, mut level)) = projectile_query.get_mut(entity) {
-					crate::weapons::upgrade_weapon(commands, entity, &mut level, None, Some(&mut projectile));
+				} else if let Ok((mut projectile, mut level, base_stats)) = projectile_query.get_mut(entity) {
+					crate::weapons::upgrade_weapon(commands, entity, &mut level, base_stats, None, Some(&mut projectile));
 					weapon_inventory.weapons.insert(weapon_id.clone(), (entity, level.0));
 				}
 			} else {

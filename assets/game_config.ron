@@ -2,7 +2,7 @@
 	weapon_ids: ["orbiting_blade", "auto_shooter", "melee_punch"],
 	enemy_ids: ["weak", "medium", "strong"],
 	initial_weapon: (
-		weapon_id: "auto_shooter",
+		weapon_id: "melee_punch",
 		level: 1,
 	),
 	powerup_pool: [
