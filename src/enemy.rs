@@ -147,14 +147,14 @@ fn spawn_enemies(
     time: Res<Time<Virtual>>,
     mut timer: ResMut<EnemySpawnTimer>,
     wave: Res<WaveTimer>,
-    player_query: Query<&Transform, With<crate::player::Player>>,
+    player_query: Query<(&Transform, &crate::player::Player), With<crate::player::Player>>,
     enemy_registry: Option<Res<EnemyRegistry>>,
     enemy_data_assets: Res<Assets<EnemyData>>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
         let mut rng = rand::thread_rng();
 
-        if let (Ok(player_transform), Some(registry)) = (player_query.single(), enemy_registry) {
+        if let (Ok((player_transform, _player)), Some(registry)) = (player_query.single(), enemy_registry) {
             // Spawn enemies off-screen
             let spawn_side = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
             let spawn_x = player_transform.translation.x + spawn_side * crate::constants::ENEMY_SPAWN_DISTANCE;
@@ -245,12 +245,17 @@ fn update_wave(
     mut wave: ResMut<WaveTimer>,
     time: Res<Time<Virtual>>,
     mut spawn_timer: ResMut<EnemySpawnTimer>,
+    player_query: Query<&crate::player::Player>,
 ) {
     if wave.timer.tick(time.delta()).just_finished() {
         wave.wave += 1;
+    }
 
-        // Increase spawn rate with each wave (decrease time between spawns)
-        let new_duration = (crate::constants::ENEMY_SPAWN_TIMER - (wave.wave as f32 * crate::constants::WAVE_SPAWN_RATE_SCALING)).max(crate::constants::MIN_SPAWN_DURATION);
+    // Calculate spawn rate based on both wave and player level
+    if let Ok(player) = player_query.single() {
+        let wave_reduction = wave.wave as f32 * crate::constants::WAVE_SPAWN_RATE_SCALING;
+        let level_reduction = (player.level.saturating_sub(1)) as f32 * crate::constants::LEVEL_SPAWN_RATE_SCALING;
+        let new_duration = (crate::constants::ENEMY_SPAWN_TIMER - wave_reduction - level_reduction).max(crate::constants::MIN_SPAWN_DURATION);
         spawn_timer.0.set_duration(std::time::Duration::from_secs_f32(new_duration));
     }
 }

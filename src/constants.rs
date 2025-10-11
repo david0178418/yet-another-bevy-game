@@ -30,6 +30,7 @@ pub const ENEMY_SPAWN_Y_MAX: f32 = 100.0;
 pub const WAVE_DURATION: f32 = 30.0;
 pub const WAVE_HEALTH_SCALING: f32 = 0.2;
 pub const WAVE_SPAWN_RATE_SCALING: f32 = 0.1;
+pub const LEVEL_SPAWN_RATE_SCALING: f32 = 0.05;
 pub const MIN_SPAWN_DURATION: f32 = 0.5;
 
 pub const HEALTH_BAR_HEIGHT: f32 = 4.0;
