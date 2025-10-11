@@ -158,6 +158,8 @@ fn spawn_player(
 	game_config: Option<Res<crate::GameConfig>>,
 	config_assets: Res<Assets<crate::GameConfigData>>,
 	player_query: Query<(), With<Player>>,
+	ui_query: Query<(), With<PlayerStatsText>>,
+	platform_query: Query<(), With<crate::physics::Ground>>,
 ) {
 	// Only spawn once
 	if !player_query.is_empty() {
@@ -194,8 +196,15 @@ fn spawn_player(
 		},
 	));
 
-	spawn_platforms(&mut commands);
-	spawn_player_ui(&mut commands);
+	// Only spawn platforms if they don't exist
+	if platform_query.is_empty() {
+		spawn_platforms(&mut commands);
+	}
+
+	// Only spawn UI if it doesn't exist
+	if ui_query.is_empty() {
+		spawn_player_ui(&mut commands);
+	}
 }
 
 fn spawn_initial_weapon(
