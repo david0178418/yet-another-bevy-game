@@ -183,8 +183,10 @@ pub fn spawn_entity_from_data(
 					spawn_logic,
 					fire_range,
 				} => {
+					let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
+					timer.tick(std::time::Duration::from_secs_f32(*cooldown)); // Start ready to fire
 					entity_commands.insert(ProjectileSpawner {
-						cooldown: Timer::from_seconds(*cooldown, TimerMode::Repeating),
+						cooldown: timer,
 						projectile_template: ProjectileTemplate {
 							damage: *damage,
 							speed: *speed,
@@ -278,81 +280,89 @@ fn update_projectile_spawners(
 
     if let Ok(player_transform) = player_query.single() {
         for (mut spawner, _) in spawner_query.iter_mut() {
-            if spawner.cooldown.tick(time.delta()).just_finished() {
-                let spawn_direction = match &spawner.spawn_logic {
-                    SpawnLogic::NearestEnemy => {
-                        // Find nearest enemy (optionally within range)
-                        let nearest_enemy = enemy_query.iter()
-                            .filter(|enemy_transform| {
-                                // If fire_range is set, only consider enemies within range
-                                if let Some(range) = spawner.fire_range {
-                                    player_transform.translation.distance(enemy_transform.translation) <= range
-                                } else {
-                                    true  // No range limit
-                                }
-                            })
-                            .min_by(|a, b| {
-                                let dist_a = player_transform.translation.distance(a.translation);
-                                let dist_b = player_transform.translation.distance(b.translation);
-                                dist_a.partial_cmp(&dist_b).unwrap()
-                            });
-
-                        // If no enemy in range, don't fire
-                        if let Some(enemy_transform) = nearest_enemy {
-                            let direction = Vec2::new(
-                                enemy_transform.translation.x - player_transform.translation.x,
-                                enemy_transform.translation.y - player_transform.translation.y,
-                            );
-                            Some(direction.normalize())
-                        } else {
-                            // No enemy in range, skip spawning projectile
-                            None
-                        }
-                    }
-                    SpawnLogic::PlayerDirection => Some(Vec2::new(1.0, 0.0)), // Could be enhanced with actual player direction
-                    SpawnLogic::Fixed(x, y) => {
-                        let direction = Vec2::new(*x, *y);
-                        if direction.length_squared() > 0.0 {
-                            Some(direction.normalize())
-                        } else {
-                            Some(Vec2::new(1.0, 0.0))
-                        }
-                    }
-                };
-
-                let Some(direction) = spawn_direction else {
-                    continue;
-                };
-
-                // Spawn projectile
-                let template = &spawner.projectile_template;
-                let angle = direction.y.atan2(direction.x);
-                commands.spawn((
-                    Sprite {
-                        color: Color::srgb(template.color.0, template.color.1, template.color.2),
-                        custom_size: Some(Vec2::new(template.size.0, template.size.1)),
-                        ..default()
-                    },
-                    Transform::from_xyz(
-                        player_transform.translation.x + direction.x * 30.0,
-                        player_transform.translation.y + direction.y * 30.0,
-                        0.0,
-                    ).with_rotation(Quat::from_rotation_z(angle)),
-                    crate::physics::Velocity {
-                        x: direction.x * template.speed,
-                        y: direction.y * template.speed,
-                    },
-                    DamageOnContact {
-                        damage: template.damage,
-                        damage_type: DamageType::OneTime,
-                        targets: TargetFilter::Enemies,
-                    },
-                    DespawnOnTimer {
-                        timer: Timer::from_seconds(template.lifetime, TimerMode::Once),
-                    },
-                    ProjectileTag,
-                ));
+            // Only tick if not finished (actively cooling down)
+            if !spawner.cooldown.finished() {
+                spawner.cooldown.tick(time.delta());
+                continue; // Skip to next weapon while cooling down
             }
+
+            // Cooldown is ready, try to fire
+            let spawn_direction = match &spawner.spawn_logic {
+                SpawnLogic::NearestEnemy => {
+                    // Find nearest enemy (optionally within range)
+                    let nearest_enemy = enemy_query.iter()
+                        .filter(|enemy_transform| {
+                            // If fire_range is set, only consider enemies within range
+                            if let Some(range) = spawner.fire_range {
+                                player_transform.translation.distance(enemy_transform.translation) <= range
+                            } else {
+                                true  // No range limit
+                            }
+                        })
+                        .min_by(|a, b| {
+                            let dist_a = player_transform.translation.distance(a.translation);
+                            let dist_b = player_transform.translation.distance(b.translation);
+                            dist_a.partial_cmp(&dist_b).unwrap()
+                        });
+
+                    // If no enemy in range, don't fire
+                    if let Some(enemy_transform) = nearest_enemy {
+                        let direction = Vec2::new(
+                            enemy_transform.translation.x - player_transform.translation.x,
+                            enemy_transform.translation.y - player_transform.translation.y,
+                        );
+                        Some(direction.normalize())
+                    } else {
+                        // No enemy in range, skip spawning projectile
+                        None
+                    }
+                }
+                SpawnLogic::PlayerDirection => Some(Vec2::new(1.0, 0.0)), // Could be enhanced with actual player direction
+                SpawnLogic::Fixed(x, y) => {
+                    let direction = Vec2::new(*x, *y);
+                    if direction.length_squared() > 0.0 {
+                        Some(direction.normalize())
+                    } else {
+                        Some(Vec2::new(1.0, 0.0))
+                    }
+                }
+            };
+
+            let Some(direction) = spawn_direction else {
+                continue;
+            };
+
+            // Reset cooldown after firing
+            spawner.cooldown.reset();
+
+            // Spawn projectile
+            let template = &spawner.projectile_template;
+            let angle = direction.y.atan2(direction.x);
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(template.color.0, template.color.1, template.color.2),
+                    custom_size: Some(Vec2::new(template.size.0, template.size.1)),
+                    ..default()
+                },
+                Transform::from_xyz(
+                    player_transform.translation.x + direction.x * 30.0,
+                    player_transform.translation.y + direction.y * 30.0,
+                    0.0,
+                ).with_rotation(Quat::from_rotation_z(angle)),
+                crate::physics::Velocity {
+                    x: direction.x * template.speed,
+                    y: direction.y * template.speed,
+                },
+                DamageOnContact {
+                    damage: template.damage,
+                    damage_type: DamageType::OneTime,
+                    targets: TargetFilter::Enemies,
+                },
+                DespawnOnTimer {
+                    timer: Timer::from_seconds(template.lifetime, TimerMode::Once),
+                },
+                ProjectileTag,
+            ));
         }
     }
 }
@@ -389,7 +399,10 @@ fn detect_melee_targets(
 
     if let Ok((player_entity, player_transform)) = player_query.single() {
         for mut melee in melee_query.iter_mut() {
-            melee.cooldown.tick(time.delta());
+            // Only tick cooldown if it's not finished (actively cooling down)
+            if !melee.cooldown.finished() {
+                melee.cooldown.tick(time.delta());
+            }
 
             // Find nearest enemy within detection range
             let nearest_enemy = enemy_query.iter()
@@ -632,15 +645,25 @@ fn update_weapon_cooldown_bars(
     for (bar, mut node) in bars.iter_mut() {
         // Check if it's a projectile weapon
         if let Ok((_, spawner)) = projectile_weapons.get(bar.weapon_entity) {
-            let progress = spawner.cooldown.fraction();
-            node.width = Val::Px(BAR_WIDTH * progress);
+            // Full bar when ready, empty when just fired, fills as it cools down
+            let readiness = if spawner.cooldown.finished() {
+                1.0
+            } else {
+                spawner.cooldown.fraction()
+            };
+            node.width = Val::Px(BAR_WIDTH * readiness);
             continue;
         }
 
         // Check if it's a melee weapon
         if let Ok((_, melee)) = melee_weapons.get(bar.weapon_entity) {
-            let progress = melee.cooldown.fraction();
-            node.width = Val::Px(BAR_WIDTH * progress);
+            // Full bar when ready, empty when just fired, fills as it cools down
+            let readiness = if melee.cooldown.finished() {
+                1.0
+            } else {
+                melee.cooldown.fraction()
+            };
+            node.width = Val::Px(BAR_WIDTH * readiness);
         }
     }
 }
