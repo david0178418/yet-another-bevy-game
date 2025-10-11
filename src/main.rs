@@ -9,6 +9,7 @@ mod experience;
 mod powerups;
 mod combat;
 mod behaviors;
+mod movement;
 mod constants;
 
 use player::PlayerPlugin;
@@ -18,6 +19,7 @@ use weapons::WeaponsPlugin;
 use experience::ExperiencePlugin;
 use powerups::PowerupsPlugin;
 use combat::CombatPlugin;
+use movement::MovementPlugin;
 
 const GAME_WIDTH: f32 = 1280.0;
 const GAME_HEIGHT: f32 = 720.0;
@@ -115,6 +117,7 @@ fn main() {
 			ExperiencePlugin,
 			PowerupsPlugin,
 			CombatPlugin,
+			MovementPlugin,
 		))
 		.insert_resource(ClearColor(Color::BLACK))
 		.add_systems(Startup, (setup_camera, load_game_config))

@@ -1,12 +1,12 @@
 (
-	color: (0.2, 0.8, 0.2),
-	base_health: 30.0,
-	size: (40.0, 40.0),
-	xp_value: 10,
+	color: (0.9, 0.5, 0.2),
+	base_health: 20.0,
+	size: (25.0, 25.0),
+	xp_value: 8,
 	behaviors: [
 		SeekTarget(
 			target_type: Player,
-			speed: 50.0,
+			speed: 120.0,
 		),
 		DamageOnContact(
 			damage: 15.0,

@@ -19,7 +19,6 @@ impl Plugin for EnemyPlugin {
             .add_systems(Update, (
                 initialize_enemy_registry,
                 spawn_enemies,
-                move_enemies,
                 update_wave,
                 update_health_bars,
             ));
@@ -37,7 +36,6 @@ struct WaveTimer {
 
 #[derive(Component)]
 pub struct Enemy {
-    pub speed: f32,
     pub xp_value: u32,
 }
 
@@ -45,10 +43,9 @@ pub struct Enemy {
 pub struct EnemyData {
 	pub color: (f32, f32, f32),
 	pub base_health: f32,
-	pub speed: f32,
-	pub damage: f32,
 	pub size: (f32, f32),
 	pub xp_value: u32,
+	pub behaviors: Vec<crate::behaviors::BehaviorData>,
 }
 
 #[derive(Default)]
@@ -129,6 +126,74 @@ fn initialize_enemy_registry(
 	});
 }
 
+fn apply_enemy_behaviors(
+	entity_commands: &mut bevy::ecs::system::EntityCommands,
+	behaviors: &[crate::behaviors::BehaviorData],
+) {
+	use crate::behaviors::*;
+
+	for behavior in behaviors {
+		match behavior {
+			BehaviorData::DamageOnContact { damage, damage_type, targets } => {
+				entity_commands.insert(DamageOnContact {
+					damage: *damage,
+					damage_type: *damage_type,
+					targets: *targets,
+				});
+			}
+			BehaviorData::SeekTarget { target_type, speed } => {
+				entity_commands.insert(SeekTarget {
+					target_type: *target_type,
+					speed: *speed,
+				});
+			}
+			BehaviorData::ZigZagMovement { base_speed, oscillation_speed, oscillation_amplitude } => {
+				entity_commands.insert(ZigZagMovement {
+					base_speed: *base_speed,
+					oscillation_speed: *oscillation_speed,
+					oscillation_amplitude: *oscillation_amplitude,
+					time: 0.0,
+				});
+			}
+			BehaviorData::MaintainDistance { target_type, preferred_distance, speed } => {
+				entity_commands.insert(MaintainDistance {
+					target_type: *target_type,
+					preferred_distance: *preferred_distance,
+					speed: *speed,
+				});
+			}
+			BehaviorData::ProjectileSpawner {
+				cooldown,
+				damage,
+				speed,
+				lifetime,
+				projectile_size,
+				projectile_color,
+				spawn_logic,
+				fire_range,
+			} => {
+				let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
+				timer.tick(std::time::Duration::from_secs_f32(*cooldown));
+				entity_commands.insert(ProjectileSpawner {
+					cooldown: timer,
+					projectile_template: ProjectileTemplate {
+						damage: *damage,
+						speed: *speed,
+						lifetime: *lifetime,
+						size: *projectile_size,
+						color: *projectile_color,
+					},
+					spawn_logic: spawn_logic.clone(),
+					fire_range: *fire_range,
+				});
+			}
+			_ => {
+				// Other behaviors (Orbiting, MeleeAttack, FollowPlayer) are not used by enemies
+			}
+		}
+	}
+}
+
 #[derive(Component)]
 pub struct HealthBar {
     pub enemy_entity: Entity,
@@ -171,7 +236,7 @@ fn spawn_enemies(
             let size = Vec2::new(enemy_data.size.0, enemy_data.size.1);
             let scaled_health = enemy_data.base_health * (1.0 + (wave.wave as f32 * crate::constants::WAVE_HEALTH_SCALING));
 
-            let enemy_entity = commands.spawn((
+            let mut enemy_commands = commands.spawn((
                 Sprite {
                     color: Color::srgb(enemy_data.color.0, enemy_data.color.1, enemy_data.color.2),
                     custom_size: Some(size),
@@ -179,23 +244,22 @@ fn spawn_enemies(
                 },
                 Transform::from_xyz(spawn_x, spawn_y, 0.0),
                 Enemy {
-                    speed: enemy_data.speed,
                     xp_value: enemy_data.xp_value,
                 },
                 crate::behaviors::Damageable {
                     health: scaled_health,
                     max_health: scaled_health,
                 },
-                crate::behaviors::DamageOnContact {
-                    damage: enemy_data.damage,
-                    damage_type: crate::behaviors::DamageType::Continuous,
-                    targets: crate::behaviors::TargetFilter::Player,
-                },
                 crate::behaviors::EnemyTag,
                 crate::physics::Velocity { x: 0.0, y: 0.0 },
                 crate::physics::Grounded(false),
                 crate::physics::Collider,
-            )).id();
+            ));
+
+            // Apply behaviors from enemy data
+            apply_enemy_behaviors(&mut enemy_commands, &enemy_data.behaviors);
+
+            let enemy_entity = enemy_commands.id();
 
             // Spawn health bar background
             commands.spawn((
@@ -220,23 +284,6 @@ fn spawn_enemies(
                 HealthBar { enemy_entity },
                 HealthBarForeground { max_health: scaled_health },
             ));
-        }
-    }
-}
-
-fn move_enemies(
-    mut enemy_query: Query<(&Transform, &mut crate::physics::Velocity, &Enemy, Has<crate::behaviors::Stunned>), Without<crate::player::Player>>,
-    player_query: Query<&Transform, With<crate::player::Player>>,
-) {
-    if let Ok(player_transform) = player_query.single() {
-        for (enemy_transform, mut velocity, enemy, is_stunned) in enemy_query.iter_mut() {
-            // Skip stunned enemies - they shouldn't move toward player
-            if is_stunned {
-                continue;
-            }
-
-            let direction = (player_transform.translation.x - enemy_transform.translation.x).signum();
-            velocity.x = direction * enemy.speed;
         }
     }
 }

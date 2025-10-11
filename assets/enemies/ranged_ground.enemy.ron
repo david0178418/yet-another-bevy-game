@@ -1,0 +1,23 @@
+(
+	color: (0.6, 0.8, 0.3),
+	base_health: 35.0,
+	size: (35.0, 35.0),
+	xp_value: 18,
+	behaviors: [
+		MaintainDistance(
+			target_type: Player,
+			preferred_distance: 200.0,
+			speed: 70.0,
+		),
+		ProjectileSpawner(
+			cooldown: 1.8,
+			damage: 25.0,
+			speed: 180.0,
+			lifetime: 5.0,
+			projectile_size: (14.0, 14.0),
+			projectile_color: (0.8, 0.9, 0.2),
+			spawn_logic: NearestEnemy,
+			fire_range: Some(300.0),
+		),
+	],
+)

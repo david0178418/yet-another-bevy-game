@@ -391,6 +391,27 @@ pub fn spawn_entity_from_data(
 				BehaviorData::FollowPlayer => {
 					entity_commands.insert(FollowPlayer);
 				}
+				BehaviorData::SeekTarget { target_type, speed } => {
+					entity_commands.insert(SeekTarget {
+						target_type: *target_type,
+						speed: *speed,
+					});
+				}
+				BehaviorData::ZigZagMovement { base_speed, oscillation_speed, oscillation_amplitude } => {
+					entity_commands.insert(ZigZagMovement {
+						base_speed: *base_speed,
+						oscillation_speed: *oscillation_speed,
+						oscillation_amplitude: *oscillation_amplitude,
+						time: 0.0,
+					});
+				}
+				BehaviorData::MaintainDistance { target_type, preferred_distance, speed } => {
+					entity_commands.insert(MaintainDistance {
+						target_type: *target_type,
+						preferred_distance: *preferred_distance,
+						speed: *speed,
+					});
+				}
 			}
 		}
 
@@ -446,15 +467,14 @@ fn redistribute_orbiting_entities(
 // Generic update system for projectile spawners
 fn update_projectile_spawners(
     mut commands: Commands,
-    mut spawner_query: Query<(&mut crate::behaviors::ProjectileSpawner, &crate::behaviors::FollowPlayer)>,
-    player_query: Query<&Transform, With<crate::behaviors::PlayerTag>>,
-    enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
+    mut spawner_query: Query<(&Transform, &mut crate::behaviors::ProjectileSpawner, Has<crate::behaviors::PlayerTag>, Has<crate::behaviors::EnemyTag>)>,
+    player_query: Query<&Transform, (With<crate::behaviors::PlayerTag>, Without<crate::behaviors::ProjectileSpawner>)>,
+    enemy_query: Query<&Transform, (With<crate::behaviors::EnemyTag>, Without<crate::behaviors::ProjectileSpawner>)>,
     time: Res<Time<Virtual>>,
 ) {
     use crate::behaviors::*;
 
-    if let Ok(player_transform) = player_query.single() {
-        for (mut spawner, _) in spawner_query.iter_mut() {
+    for (spawner_transform, mut spawner, is_player_weapon, is_enemy) in spawner_query.iter_mut() {
             // Only tick if not finished (actively cooling down)
             if !spawner.cooldown.is_finished() {
                 spawner.cooldown.tick(time.delta());
@@ -464,31 +484,58 @@ fn update_projectile_spawners(
             // Cooldown is ready, try to fire
             let spawn_direction = match &spawner.spawn_logic {
                 SpawnLogic::NearestEnemy => {
-                    // Find nearest enemy (optionally within range)
-                    let nearest_enemy = enemy_query.iter()
-                        .filter(|enemy_transform| {
-                            // If fire_range is set, only consider enemies within range
-                            if let Some(range) = spawner.fire_range {
-                                player_transform.translation.distance(enemy_transform.translation) <= range
-                            } else {
-                                true  // No range limit
-                            }
-                        })
-                        .min_by(|a, b| {
-                            let dist_a = player_transform.translation.distance(a.translation);
-                            let dist_b = player_transform.translation.distance(b.translation);
-                            dist_a.partial_cmp(&dist_b).unwrap()
-                        });
+                    // For player weapons, target enemies. For enemy weapons, target player.
+                    if is_player_weapon {
+                        // Find nearest enemy (optionally within range)
+                        let nearest_enemy = enemy_query.iter()
+                            .filter(|enemy_transform| {
+                                // If fire_range is set, only consider enemies within range
+                                if let Some(range) = spawner.fire_range {
+                                    spawner_transform.translation.distance(enemy_transform.translation) <= range
+                                } else {
+                                    true  // No range limit
+                                }
+                            })
+                            .min_by(|a, b| {
+                                let dist_a = spawner_transform.translation.distance(a.translation);
+                                let dist_b = spawner_transform.translation.distance(b.translation);
+                                dist_a.partial_cmp(&dist_b).unwrap()
+                            });
 
-                    // If no enemy in range, don't fire
-                    if let Some(enemy_transform) = nearest_enemy {
-                        let direction = Vec2::new(
-                            enemy_transform.translation.x - player_transform.translation.x,
-                            enemy_transform.translation.y - player_transform.translation.y,
-                        );
-                        Some(direction.normalize())
+                        // If no enemy in range, don't fire
+                        if let Some(enemy_transform) = nearest_enemy {
+                            let direction = Vec2::new(
+                                enemy_transform.translation.x - spawner_transform.translation.x,
+                                enemy_transform.translation.y - spawner_transform.translation.y,
+                            );
+                            Some(direction.normalize())
+                        } else {
+                            // No enemy in range, skip spawning projectile
+                            None
+                        }
+                    } else if is_enemy {
+                        // Enemy targeting player
+                        if let Ok(player_transform) = player_query.single() {
+                            let direction = Vec2::new(
+                                player_transform.translation.x - spawner_transform.translation.x,
+                                player_transform.translation.y - spawner_transform.translation.y,
+                            );
+                            let distance = direction.length();
+
+                            // Check fire range
+                            if let Some(range) = spawner.fire_range {
+                                if distance > range {
+                                    None
+                                } else {
+                                    Some(direction.normalize())
+                                }
+                            } else {
+                                Some(direction.normalize())
+                            }
+                        } else {
+                            None
+                        }
                     } else {
-                        // No enemy in range, skip spawning projectile
                         None
                     }
                 }
@@ -513,6 +560,14 @@ fn update_projectile_spawners(
             // Spawn projectile
             let template = &spawner.projectile_template;
             let angle = direction.y.atan2(direction.x);
+
+            // Determine target filter based on who's spawning
+            let target_filter = if is_player_weapon {
+                TargetFilter::Enemies
+            } else {
+                TargetFilter::Player
+            };
+
             commands.spawn((
                 Sprite {
                     color: Color::srgb(template.color.0, template.color.1, template.color.2),
@@ -520,8 +575,8 @@ fn update_projectile_spawners(
                     ..default()
                 },
                 Transform::from_xyz(
-                    player_transform.translation.x + direction.x * 30.0,
-                    player_transform.translation.y + direction.y * 30.0,
+                    spawner_transform.translation.x + direction.x * 30.0,
+                    spawner_transform.translation.y + direction.y * 30.0,
                     0.0,
                 ).with_rotation(Quat::from_rotation_z(angle)),
                 crate::physics::Velocity {
@@ -531,14 +586,13 @@ fn update_projectile_spawners(
                 DamageOnContact {
                     damage: template.damage,
                     damage_type: DamageType::OneTime,
-                    targets: TargetFilter::Enemies,
+                    targets: target_filter,
                 },
                 DespawnOnTimer {
                     timer: Timer::from_seconds(template.lifetime, TimerMode::Once),
                 },
                 ProjectileTag,
             ));
-        }
     }
 }
 

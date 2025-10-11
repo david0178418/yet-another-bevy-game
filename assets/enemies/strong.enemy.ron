@@ -1,8 +1,17 @@
 (
 	color: (0.8, 0.8, 0.2),
 	base_health: 50.0,
-	speed: 30.0,
-	damage: 25.0,
 	size: (50.0, 50.0),
 	xp_value: 20,
+	behaviors: [
+		SeekTarget(
+			target_type: Player,
+			speed: 30.0,
+		),
+		DamageOnContact(
+			damage: 25.0,
+			damage_type: Continuous,
+			targets: Player,
+		),
+	],
 )

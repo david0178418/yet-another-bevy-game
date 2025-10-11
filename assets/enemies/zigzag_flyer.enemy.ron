@@ -1,0 +1,22 @@
+(
+	color: (0.5, 0.9, 0.9),
+	base_health: 25.0,
+	size: (28.0, 28.0),
+	xp_value: 12,
+	behaviors: [
+		SeekTarget(
+			target_type: Player,
+			speed: 100.0,
+		),
+		ZigZagMovement(
+			base_speed: 100.0,
+			oscillation_speed: 5.0,
+			oscillation_amplitude: 0.4,
+		),
+		DamageOnContact(
+			damage: 12.0,
+			damage_type: Continuous,
+			targets: Player,
+		),
+	],
+)

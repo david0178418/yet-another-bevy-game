@@ -19,6 +19,33 @@ pub struct FollowEntity {
 #[derive(Component)]
 pub struct FollowPlayer;
 
+#[derive(Clone, Copy, Deserialize)]
+pub enum TargetType {
+	Player,
+	NearestEnemy,
+}
+
+#[derive(Component)]
+pub struct SeekTarget {
+	pub target_type: TargetType,
+	pub speed: f32,
+}
+
+#[derive(Component)]
+pub struct ZigZagMovement {
+	pub base_speed: f32,
+	pub oscillation_speed: f32,
+	pub oscillation_amplitude: f32,
+	pub time: f32,
+}
+
+#[derive(Component)]
+pub struct MaintainDistance {
+	pub target_type: TargetType,
+	pub preferred_distance: f32,
+	pub speed: f32,
+}
+
 // ============ Damage Behaviors ============
 
 #[derive(Component)]
@@ -165,6 +192,20 @@ pub enum BehaviorData {
 		hitbox_color: (f32, f32, f32),
 	},
 	FollowPlayer,
+	SeekTarget {
+		target_type: TargetType,
+		speed: f32,
+	},
+	ZigZagMovement {
+		base_speed: f32,
+		oscillation_speed: f32,
+		oscillation_amplitude: f32,
+	},
+	MaintainDistance {
+		target_type: TargetType,
+		preferred_distance: f32,
+		speed: f32,
+	},
 }
 
 // ============ Utility Component ============

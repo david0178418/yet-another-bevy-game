@@ -1,6 +1,6 @@
 (
 	weapon_ids: ["orbiting_blade", "auto_shooter", "melee_punch"],
-	enemy_ids: ["weak", "medium", "strong"],
+	enemy_ids: ["weak", "medium", "strong", "straight_flyer", "zigzag_flyer", "ranged_flyer", "ranged_ground"],
 	initial_weapon: (
 		weapon_id: "orbiting_blade",
 		level: 1,
