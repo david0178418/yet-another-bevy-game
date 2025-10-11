@@ -246,18 +246,34 @@ fn update_projectile_spawners(
 
                         // If no enemy in range, don't fire
                         if let Some(enemy_transform) = nearest_enemy {
-                            (enemy_transform.translation.x - player_transform.translation.x).signum()
+                            let direction = Vec2::new(
+                                enemy_transform.translation.x - player_transform.translation.x,
+                                enemy_transform.translation.y - player_transform.translation.y,
+                            );
+                            Some(direction.normalize())
                         } else {
                             // No enemy in range, skip spawning projectile
-                            continue;
+                            None
                         }
                     }
-                    SpawnLogic::PlayerDirection => 1.0, // Could be enhanced with actual player direction
-                    SpawnLogic::Fixed(x, _y) => (*x).signum(),
+                    SpawnLogic::PlayerDirection => Some(Vec2::new(1.0, 0.0)), // Could be enhanced with actual player direction
+                    SpawnLogic::Fixed(x, y) => {
+                        let direction = Vec2::new(*x, *y);
+                        if direction.length_squared() > 0.0 {
+                            Some(direction.normalize())
+                        } else {
+                            Some(Vec2::new(1.0, 0.0))
+                        }
+                    }
+                };
+
+                let Some(direction) = spawn_direction else {
+                    continue;
                 };
 
                 // Spawn projectile
                 let template = &spawner.projectile_template;
+                let angle = direction.y.atan2(direction.x);
                 commands.spawn((
                     Sprite {
                         color: Color::srgb(template.color.0, template.color.1, template.color.2),
@@ -265,13 +281,13 @@ fn update_projectile_spawners(
                         ..default()
                     },
                     Transform::from_xyz(
-                        player_transform.translation.x + spawn_direction * 30.0,
-                        player_transform.translation.y,
+                        player_transform.translation.x + direction.x * 30.0,
+                        player_transform.translation.y + direction.y * 30.0,
                         0.0,
-                    ),
+                    ).with_rotation(Quat::from_rotation_z(angle)),
                     crate::physics::Velocity {
-                        x: spawn_direction * template.speed,
-                        y: 0.0,
+                        x: direction.x * template.speed,
+                        y: direction.y * template.speed,
                     },
                     DamageOnContact {
                         damage: template.damage,
