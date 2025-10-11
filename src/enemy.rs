@@ -194,6 +194,7 @@ fn spawn_enemies(
                 crate::behaviors::EnemyTag,
                 crate::physics::Velocity { x: 0.0, y: 0.0 },
                 crate::physics::Grounded(false),
+                crate::physics::Collider,
             )).id();
 
             // Spawn health bar background

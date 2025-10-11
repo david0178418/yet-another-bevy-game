@@ -23,7 +23,9 @@ impl Plugin for CombatPlugin {
         app.add_systems(Update, (
             apply_contact_damage,
             handle_damageable_death,
-        ));
+        )
+            .after(crate::physics::PhysicsSet)
+            .before(crate::physics::CollisionResolutionSet));
     }
 }
 

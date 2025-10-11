@@ -186,6 +186,7 @@ fn spawn_player(
 		},
 		crate::physics::Velocity { x: 0.0, y: 0.0 },
 		crate::physics::Grounded(false),
+		crate::physics::Collider,
 		NeedsInitialWeapon {
 			weapon_id: config_data.initial_weapon.weapon_id.clone(),
 			count: config_data.initial_weapon.level,
