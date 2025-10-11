@@ -18,4 +18,9 @@
 			hitbox_color: (0.9, 0.3, 0.3),
 		),
 	],
+	upgrade_behaviors: [
+		ScaleDamage(per_level: 0.2),
+		ReduceCooldown(per_level: 0.1, min_multiplier: 0.5),
+		IncreaseEffect(per_level: 0.15),
+	],
 )

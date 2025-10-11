@@ -100,10 +100,6 @@ struct PowerupButton {
     index: usize,
 }
 
-type MeleeUpgradeQuery<'w, 's> = Query<'w, 's, (&'static mut crate::behaviors::MeleeAttack, &'static mut crate::behaviors::WeaponLevel, &'static crate::behaviors::BaseWeaponStats), With<crate::behaviors::WeaponId>>;
-type ProjectileUpgradeQuery<'w, 's> = Query<'w, 's, (&'static mut crate::behaviors::ProjectileSpawner, &'static mut crate::behaviors::WeaponLevel, &'static crate::behaviors::BaseWeaponStats), (With<crate::behaviors::WeaponId>, Without<crate::behaviors::MeleeAttack>)>;
-
-#[allow(clippy::too_many_arguments)]
 fn apply_powerup(
 	powerup_def: &crate::PowerupDefinition,
 	commands: &mut Commands,
@@ -111,22 +107,17 @@ fn apply_powerup(
 	player_damageable: &mut crate::behaviors::Damageable,
 	weapon_resources: &WeaponResources,
 	weapon_inventory: &mut crate::weapons::WeaponInventory,
-	melee_query: &mut MeleeUpgradeQuery,
-	projectile_query: &mut ProjectileUpgradeQuery,
+	weapon_level_query: &mut Query<&mut crate::behaviors::WeaponLevel>,
 ) {
 	match powerup_def {
 		crate::PowerupDefinition::Weapon(weapon_id) => {
 			// Check if player already owns this weapon
-			if let Some((entity, _level)) = weapon_inventory.weapons.get(weapon_id) {
-				// Upgrade existing weapon
+			if let Some((entity, _current_level)) = weapon_inventory.weapons.get(weapon_id) {
+				// Upgrade existing weapon by incrementing its level
+				// The generic upgrade system will handle the rest
 				let entity = *entity;
-
-				// Try to get mutable components for upgrading
-				if let Ok((mut melee, mut level, base_stats)) = melee_query.get_mut(entity) {
-					crate::weapons::upgrade_weapon(commands, entity, &mut level, base_stats, Some(&mut melee), None);
-					weapon_inventory.weapons.insert(weapon_id.clone(), (entity, level.0));
-				} else if let Ok((mut projectile, mut level, base_stats)) = projectile_query.get_mut(entity) {
-					crate::weapons::upgrade_weapon(commands, entity, &mut level, base_stats, None, Some(&mut projectile));
+				if let Ok(mut level) = weapon_level_query.get_mut(entity) {
+					level.0 += 1;
 					weapon_inventory.weapons.insert(weapon_id.clone(), (entity, level.0));
 				}
 			} else {
@@ -321,15 +312,14 @@ fn handle_powerup_selection(
     input: InputState,
     weapon_resources: WeaponResources,
     mut weapon_inventory: ResMut<crate::weapons::WeaponInventory>,
-    mut melee_query: MeleeUpgradeQuery,
-    mut projectile_query: ProjectileUpgradeQuery,
+    mut weapon_level_query: Query<&mut crate::behaviors::WeaponLevel>,
 ) {
     // Handle mouse interactions
     for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
                 if let Ok((mut player, mut damageable)) = player_query.single_mut() {
-                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources, &mut weapon_inventory, &mut melee_query, &mut projectile_query);
+                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources, &mut weapon_inventory, &mut weapon_level_query);
                 }
                 cleanup_powerup_ui(&mut commands, &mut ui_state);
             }
@@ -372,7 +362,7 @@ fn handle_powerup_selection(
         for button in button_query.iter() {
             if button.index == ui_state.state.selected_index {
                 if let Ok((mut player, mut damageable)) = player_query.single_mut() {
-                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources, &mut weapon_inventory, &mut melee_query, &mut projectile_query);
+                    apply_powerup(&button.powerup_def, &mut commands, &mut player, &mut damageable, &weapon_resources, &mut weapon_inventory, &mut weapon_level_query);
                 }
                 cleanup_powerup_ui(&mut commands, &mut ui_state);
                 break;

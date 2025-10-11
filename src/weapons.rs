@@ -19,6 +19,8 @@ pub struct WeaponData {
 	pub description: String,
 	pub visual: VisualData,
 	pub behaviors: Vec<BehaviorData>,
+	#[serde(default)]
+	pub upgrade_behaviors: Vec<crate::behaviors::UpgradeBehavior>,
 }
 
 #[derive(Default)]
@@ -95,6 +97,8 @@ impl Plugin for WeaponsPlugin {
             .init_resource::<WeaponInventory>()
             .add_systems(Update, (
                 initialize_weapon_registry,
+                apply_weapon_upgrades,
+                sync_weapon_stats,
                 redistribute_orbiting_entities,
                 update_orbiting_entities,
                 update_projectile_spawners,
@@ -136,48 +140,142 @@ fn initialize_weapon_registry(
 	commands.insert_resource(WeaponRegistry { weapons });
 }
 
-// Calculate stat multipliers based on level
-fn calculate_upgrade_multipliers(level: u32) -> (f32, f32, f32) {
-	use crate::constants::*;
-	let level_f = level as f32;
+// ============ Generic Upgrade System ============
 
-	// Level 1 = base stats (multiplier 1.0), level 2+ = increased
-	let damage_multiplier = 1.0 + (level_f - 1.0) * WEAPON_DAMAGE_INCREASE_PER_LEVEL;
-	let cooldown_multiplier = (1.0 - (level_f - 1.0) * WEAPON_COOLDOWN_DECREASE_PER_LEVEL)
-		.max(WEAPON_MIN_COOLDOWN_MULTIPLIER);
-	let effect_multiplier = 1.0 + (level_f - 1.0) * WEAPON_EFFECT_INCREASE_PER_LEVEL;
+// Generic system that applies upgrades to weapons based on their UpgradeBehaviors
+fn apply_weapon_upgrades(
+	mut commands: Commands,
+	mut upgraded_weapons: Query<
+		(
+			Entity,
+			&crate::behaviors::WeaponId,
+			&mut crate::behaviors::WeaponLevel,
+			&crate::behaviors::UpgradeBehaviors,
+			Option<&crate::behaviors::DamageStats>,
+			Option<&crate::behaviors::CooldownStats>,
+			Option<&crate::behaviors::EffectStats>,
+			Option<&mut crate::behaviors::DamageOnContact>,
+			Option<&mut crate::behaviors::ProjectileSpawner>,
+			Option<&mut crate::behaviors::MeleeAttack>,
+		),
+		Changed<crate::behaviors::WeaponLevel>,
+	>,
+	weapon_registry: Option<Res<WeaponRegistry>>,
+	weapon_data_assets: Res<Assets<WeaponData>>,
+	weapon_inventory: Option<Res<WeaponInventory>>,
+) {
+	for (entity, weapon_id, weapon_level, upgrade_behaviors, damage_stats, cooldown_stats, effect_stats,
+	     mut damage_on_contact, mut projectile, mut melee) in upgraded_weapons.iter_mut() {
+		// Check if this entity is the primary weapon in the inventory
+		let is_primary = weapon_inventory
+			.as_ref()
+			.and_then(|inv| inv.weapons.get(&weapon_id.0))
+			.map(|(primary_entity, _)| *primary_entity == entity)
+			.unwrap_or(false);
+		for behavior in &upgrade_behaviors.0 {
+			match behavior {
+				crate::behaviors::UpgradeBehavior::ScaleDamage { per_level } => {
+					if let Some(damage_stats) = damage_stats {
+						let multiplier = 1.0 + (weapon_level.0 as f32 - 1.0) * per_level;
+						let new_damage = damage_stats.base * multiplier;
 
-	(damage_multiplier, cooldown_multiplier, effect_multiplier)
+						// Apply to DamageOnContact if present
+						if let Some(ref mut contact) = damage_on_contact {
+							contact.damage = new_damage;
+						}
+
+						// Apply to ProjectileSpawner if present
+						if let Some(ref mut proj) = projectile {
+							proj.projectile_template.damage = new_damage;
+						}
+
+						// Apply to MeleeAttack if present
+						if let Some(ref mut mel) = melee {
+							mel.damage = new_damage;
+						}
+					}
+				}
+				crate::behaviors::UpgradeBehavior::ReduceCooldown { per_level, min_multiplier } => {
+					if let Some(cooldown_stats) = cooldown_stats {
+						let multiplier = (1.0 - (weapon_level.0 as f32 - 1.0) * per_level).max(*min_multiplier);
+						let new_cooldown = cooldown_stats.base * multiplier;
+						let duration = std::time::Duration::from_secs_f32(new_cooldown);
+
+						if let Some(ref mut proj) = projectile {
+							proj.cooldown.set_duration(duration);
+						}
+						if let Some(ref mut mel) = melee {
+							mel.cooldown.set_duration(duration);
+						}
+					}
+				}
+				crate::behaviors::UpgradeBehavior::IncreaseEffect { per_level } => {
+					if let Some(effect_stats) = effect_stats {
+						let multiplier = 1.0 + (weapon_level.0 as f32 - 1.0) * per_level;
+						let new_effect = effect_stats.base * multiplier;
+
+						if let Some(ref mut mel) = melee {
+							mel.stun_duration = new_effect;
+						}
+					}
+				}
+				crate::behaviors::UpgradeBehavior::SpawnAdditionalEntity => {
+					// Only spawn additional entities for the primary weapon in inventory
+					// This prevents cascade spawning when newly spawned entities get their level set
+					if !is_primary {
+						continue;
+					}
+
+					// Spawn one additional entity (e.g., for orbiting blades)
+					if let Some(registry) = &weapon_registry {
+						if let Some(weapon_handle) = registry.get(&weapon_id.0) {
+							if let Some(weapon_data) = weapon_data_assets.get(weapon_handle) {
+								let new_entities = spawn_entity_from_data(&mut commands, weapon_data, 1, &weapon_id.0);
+
+								// Set new entities to the current weapon level
+								for new_entity in new_entities {
+									commands.entity(new_entity).insert(*weapon_level);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
-// Upgrade an existing weapon by level
-pub fn upgrade_weapon(
-	commands: &mut Commands,
-	entity: Entity,
-	weapon_level: &mut crate::behaviors::WeaponLevel,
-	base_stats: &crate::behaviors::BaseWeaponStats,
-	melee_query: Option<&mut crate::behaviors::MeleeAttack>,
-	projectile_query: Option<&mut crate::behaviors::ProjectileSpawner>,
+// Sync damage across all entities with the same WeaponId (for weapons with multiple instances like orbiting blades)
+fn sync_weapon_stats(
+	mut weapon_entities: Query<(
+		&crate::behaviors::WeaponId,
+		&crate::behaviors::WeaponLevel,
+		&crate::behaviors::DamageStats,
+		&mut crate::behaviors::DamageOnContact,
+	)>,
 ) {
-	weapon_level.0 += 1;
-	let (damage_mult, cooldown_mult, effect_mult) = calculate_upgrade_multipliers(weapon_level.0);
+	use std::collections::HashMap;
 
-	if let Some(melee) = melee_query {
-		melee.damage = base_stats.base_damage * damage_mult;
-		melee.cooldown.set_duration(std::time::Duration::from_secs_f32(
-			base_stats.base_cooldown * cooldown_mult
-		));
-		melee.stun_duration = base_stats.base_effect * effect_mult;
+	// Find the highest level and damage for each weapon_id
+	let mut weapon_stats: HashMap<String, (u32, f32)> = HashMap::new();
+
+	for (weapon_id, level, damage_stats, _) in weapon_entities.iter() {
+		let entry = weapon_stats.entry(weapon_id.0.clone()).or_insert((0, 0.0));
+		if level.0 > entry.0 {
+			entry.0 = level.0;
+			entry.1 = damage_stats.base;
+		}
 	}
 
-	if let Some(projectile) = projectile_query {
-		projectile.projectile_template.damage = base_stats.base_damage * damage_mult;
-		projectile.cooldown.set_duration(std::time::Duration::from_secs_f32(
-			base_stats.base_cooldown * cooldown_mult
-		));
+	// Update all entities with the same weapon_id to have matching damage
+	for (weapon_id, _, damage_stats, mut contact) in weapon_entities.iter_mut() {
+		if let Some((max_level, _)) = weapon_stats.get(&weapon_id.0) {
+			// Recalculate damage based on max level
+			// This assumes ScaleDamage behavior - we could make this more sophisticated
+			let multiplier = 1.0 + (*max_level as f32 - 1.0) * crate::constants::WEAPON_DAMAGE_INCREASE_PER_LEVEL;
+			contact.damage = damage_stats.base * multiplier;
+		}
 	}
-
-	commands.entity(entity).insert(*weapon_level);
 }
 
 // Generic spawn function that creates entities from weapon data
@@ -222,11 +320,14 @@ pub fn spawn_entity_from_data(
 					});
 				}
 				BehaviorData::DamageOnContact { damage, damage_type, targets } => {
-					entity_commands.insert(DamageOnContact {
-						damage: *damage,
-						damage_type: *damage_type,
-						targets: *targets,
-					});
+					entity_commands.insert((
+						DamageOnContact {
+							damage: *damage,
+							damage_type: *damage_type,
+							targets: *targets,
+						},
+						DamageStats { base: *damage },
+					));
 				}
 				BehaviorData::ProjectileSpawner {
 					cooldown,
@@ -253,11 +354,8 @@ pub fn spawn_entity_from_data(
 							spawn_logic: spawn_logic.clone(),
 							fire_range: *fire_range,
 						},
-						BaseWeaponStats {
-							base_damage: *damage,
-							base_cooldown: *cooldown,
-							base_effect: 0.0,  // Not used for projectile weapons
-						},
+						DamageStats { base: *damage },
+						CooldownStats { base: *cooldown },
 					));
 				}
 				BehaviorData::MeleeAttack {
@@ -283,17 +381,20 @@ pub fn spawn_entity_from_data(
 							hitbox_size: *hitbox_size,
 							hitbox_color: *hitbox_color,
 						},
-						BaseWeaponStats {
-							base_damage: *damage,
-							base_cooldown: *cooldown,
-							base_effect: *stun_duration,
-						},
+						DamageStats { base: *damage },
+						CooldownStats { base: *cooldown },
+						EffectStats { base: *stun_duration },
 					));
 				}
 				BehaviorData::FollowPlayer => {
 					entity_commands.insert(FollowPlayer);
 				}
 			}
+		}
+
+		// Add UpgradeBehaviors from weapon data
+		if !weapon_data.upgrade_behaviors.is_empty() {
+			entity_commands.insert(UpgradeBehaviors(weapon_data.upgrade_behaviors.clone()));
 		}
 
 		let entity_id = entity_commands.id();

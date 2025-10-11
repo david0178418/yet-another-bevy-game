@@ -18,4 +18,8 @@
 			fire_range: Some(400.0),
 		),
 	],
+	upgrade_behaviors: [
+		ScaleDamage(per_level: 0.2),
+		ReduceCooldown(per_level: 0.1, min_multiplier: 0.5),
+	],
 )

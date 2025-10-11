@@ -14,4 +14,8 @@
 			targets: Enemies,
 		),
 	],
+	upgrade_behaviors: [
+		ScaleDamage(per_level: 0.2),
+		SpawnAdditionalEntity,
+	],
 )

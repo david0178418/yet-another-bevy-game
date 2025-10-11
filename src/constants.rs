@@ -84,10 +84,8 @@ pub const AUTO_SHOOTER_DEFAULT_RANGE: f32 = 400.0;
 pub const WEAPON_RANGE_BOOST_AMOUNT: f32 = 100.0;
 
 // Weapon upgrade scaling per level
-pub const WEAPON_DAMAGE_INCREASE_PER_LEVEL: f32 = 0.2;  // +20% damage per level
-pub const WEAPON_COOLDOWN_DECREASE_PER_LEVEL: f32 = 0.1;  // -10% cooldown per level
-pub const WEAPON_MIN_COOLDOWN_MULTIPLIER: f32 = 0.5;  // Minimum 50% cooldown
-pub const WEAPON_EFFECT_INCREASE_PER_LEVEL: f32 = 0.15;  // +15% effects (stun, etc) per level
+// Note: Upgrade behaviors are now defined in weapon data files (upgrade_behaviors field)
+pub const WEAPON_DAMAGE_INCREASE_PER_LEVEL: f32 = 0.2;  // +20% damage per level (default for sync)
 
 // ============ Melee Attack Constants ============
 

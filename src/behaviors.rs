@@ -183,10 +183,33 @@ pub struct WeaponId(pub String);
 #[derive(Component, Clone, Copy)]
 pub struct WeaponLevel(pub u32);
 
-// Store base values for proper upgrade calculations
+// ============ Weapon Stat Components ============
+// Each weapon composes only the stats it needs
+
 #[derive(Component, Clone, Copy)]
-pub struct BaseWeaponStats {
-	pub base_damage: f32,
-	pub base_cooldown: f32,
-	pub base_effect: f32,  // For melee: stun duration
+pub struct DamageStats {
+	pub base: f32,
 }
+
+#[derive(Component, Clone, Copy)]
+pub struct CooldownStats {
+	pub base: f32,
+}
+
+#[derive(Component, Clone, Copy)]
+pub struct EffectStats {
+	pub base: f32,  // For melee: stun duration, for projectiles: speed, etc.
+}
+
+// ============ Upgrade Behavior System ============
+
+#[derive(Clone, Copy, Deserialize)]
+pub enum UpgradeBehavior {
+	ScaleDamage { per_level: f32 },
+	ReduceCooldown { per_level: f32, min_multiplier: f32 },
+	IncreaseEffect { per_level: f32 },
+	SpawnAdditionalEntity,
+}
+
+#[derive(Component, Clone, Deserialize)]
+pub struct UpgradeBehaviors(pub Vec<UpgradeBehavior>);
