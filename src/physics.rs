@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, ecs::system::ParamSet};
 
 pub struct PhysicsPlugin;
 
@@ -32,11 +32,17 @@ pub struct Velocity {
 #[derive(Component)]
 pub struct Grounded(pub bool);
 
+/// Marker component for static/immovable objects like platforms.
+/// Entities with Ground are excluded from dynamic collision resolution
+/// but are still used for ground detection.
 #[derive(Component)]
 pub struct Ground;
 
 #[derive(Component)]
 pub struct Collider;
+
+type ColliderQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform, &'static Sprite), With<Collider>>;
+type GroundedQuery<'w, 's> = Query<'w, 's, (Entity, &'static mut Transform, &'static Sprite, &'static mut Velocity, &'static mut Grounded)>;
 
 fn apply_gravity(
     mut query: Query<(&mut Velocity, &Grounded)>,
@@ -60,7 +66,7 @@ fn apply_velocity(
 }
 
 fn resolve_entity_collisions(
-    mut query: Query<(&mut Transform, &Sprite), With<Collider>>,
+    mut query: Query<(&mut Transform, &Sprite), (With<Collider>, Without<Ground>)>,
 ) {
     let mut combinations = query.iter_combinations_mut();
 
@@ -100,36 +106,51 @@ fn resolve_entity_collisions(
 }
 
 fn check_ground_collision(
-    mut player_query: Query<(&mut Transform, &Sprite, &mut Velocity, &mut Grounded), Without<Ground>>,
-    ground_query: Query<(&Transform, &Sprite), With<Ground>>,
+    mut param_set: ParamSet<(
+        ColliderQuery,
+        GroundedQuery,
+    )>,
 ) {
-    for (mut player_transform, player_sprite, mut velocity, mut grounded) in player_query.iter_mut() {
-        let player_size = player_sprite.custom_size.unwrap_or(Vec2::ONE);
-        let player_bottom = player_transform.translation.y - player_size.y / 2.0;
-        let player_left = player_transform.translation.x - player_size.x / 2.0;
-        let player_right = player_transform.translation.x + player_size.x / 2.0;
+    // First pass: collect all collider positions and sizes
+    let collider_data: Vec<(Entity, Vec3, Vec2)> = param_set.p0()
+        .iter()
+        .map(|(entity, transform, sprite)| {
+            (entity, transform.translation, sprite.custom_size.unwrap_or(Vec2::ONE))
+        })
+        .collect();
+
+    // Second pass: detect ground collisions and update grounded entities
+    for (entity, mut entity_transform, entity_sprite, mut velocity, mut grounded) in param_set.p1().iter_mut() {
+        let entity_size = entity_sprite.custom_size.unwrap_or(Vec2::ONE);
+        let entity_bottom = entity_transform.translation.y - entity_size.y / 2.0;
+        let entity_left = entity_transform.translation.x - entity_size.x / 2.0;
+        let entity_right = entity_transform.translation.x + entity_size.x / 2.0;
 
         grounded.0 = false;
 
-        for (ground_transform, ground_sprite) in ground_query.iter() {
-            let ground_size = ground_sprite.custom_size.unwrap_or(Vec2::ONE);
-            let ground_top = ground_transform.translation.y + ground_size.y / 2.0;
-            let ground_left = ground_transform.translation.x - ground_size.x / 2.0;
-            let ground_right = ground_transform.translation.x + ground_size.x / 2.0;
+        for (collider_entity, collider_translation, collider_size) in &collider_data {
+            // Skip self
+            if entity == *collider_entity {
+                continue;
+            }
+
+            let collider_top = collider_translation.y + collider_size.y / 2.0;
+            let collider_left = collider_translation.x - collider_size.x / 2.0;
+            let collider_right = collider_translation.x + collider_size.x / 2.0;
 
             // Skip if not overlapping horizontally
-            if player_right <= ground_left || player_left >= ground_right {
+            if entity_right <= collider_left || entity_left >= collider_right {
                 continue;
             }
 
             // Skip if not close to ground or moving upward
-            if player_bottom > ground_top || player_bottom <= ground_top - crate::constants::GROUND_SNAP_DISTANCE || velocity.y > 0.0 {
+            if entity_bottom > collider_top || entity_bottom <= collider_top - crate::constants::GROUND_SNAP_DISTANCE || velocity.y > 0.0 {
                 continue;
             }
 
             grounded.0 = true;
             velocity.y = 0.0;
-            player_transform.translation.y = ground_top + player_size.y / 2.0;
+            entity_transform.translation.y = collider_top + entity_size.y / 2.0;
             break;
         }
     }

@@ -65,6 +65,7 @@ fn spawn_platform(commands: &mut Commands, position: Vec3, size: Vec2) {
 		},
 		Transform::from_translation(position),
 		crate::physics::Ground,
+		crate::physics::Collider,
 	));
 }
 
