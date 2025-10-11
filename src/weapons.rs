@@ -142,24 +142,26 @@ fn initialize_weapon_registry(
 
 // ============ Generic Upgrade System ============
 
+type UpgradedWeaponsQuery<'w, 's> = Query<'w, 's,
+    (
+        Entity,
+        &'static crate::behaviors::WeaponId,
+        &'static mut crate::behaviors::WeaponLevel,
+        &'static crate::behaviors::UpgradeBehaviors,
+        Option<&'static crate::behaviors::DamageStats>,
+        Option<&'static crate::behaviors::CooldownStats>,
+        Option<&'static crate::behaviors::EffectStats>,
+        Option<&'static mut crate::behaviors::DamageOnContact>,
+        Option<&'static mut crate::behaviors::ProjectileSpawner>,
+        Option<&'static mut crate::behaviors::MeleeAttack>,
+    ),
+    Changed<crate::behaviors::WeaponLevel>,
+>;
+
 // Generic system that applies upgrades to weapons based on their UpgradeBehaviors
 fn apply_weapon_upgrades(
 	mut commands: Commands,
-	mut upgraded_weapons: Query<
-		(
-			Entity,
-			&crate::behaviors::WeaponId,
-			&mut crate::behaviors::WeaponLevel,
-			&crate::behaviors::UpgradeBehaviors,
-			Option<&crate::behaviors::DamageStats>,
-			Option<&crate::behaviors::CooldownStats>,
-			Option<&crate::behaviors::EffectStats>,
-			Option<&mut crate::behaviors::DamageOnContact>,
-			Option<&mut crate::behaviors::ProjectileSpawner>,
-			Option<&mut crate::behaviors::MeleeAttack>,
-		),
-		Changed<crate::behaviors::WeaponLevel>,
-	>,
+	mut upgraded_weapons: UpgradedWeaponsQuery,
 	weapon_registry: Option<Res<WeaponRegistry>>,
 	weapon_data_assets: Res<Assets<WeaponData>>,
 	weapon_inventory: Option<Res<WeaponInventory>>,
