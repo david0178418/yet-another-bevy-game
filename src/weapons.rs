@@ -61,6 +61,28 @@ impl WeaponRegistry {
 #[derive(Resource, Default)]
 struct OrbitingEntityCount(usize);
 
+// UI Components for weapon cooldowns
+#[derive(Component)]
+struct WeaponCooldownBar {
+	weapon_entity: Entity,
+	weapon_name: String,
+}
+
+#[derive(Component)]
+struct WeaponCooldownBarBackground;
+
+#[derive(Component)]
+struct WeaponCooldownBarForeground;
+
+#[derive(Component)]
+struct WeaponCooldownText;
+
+#[derive(Component)]
+struct HasCooldownUI;
+
+#[derive(Component)]
+struct WeaponName(String);
+
 impl Plugin for WeaponsPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<WeaponData>()
@@ -75,6 +97,8 @@ impl Plugin for WeaponsPlugin {
                 detect_melee_targets,
                 execute_dash,
                 update_shock_waves,
+                spawn_weapon_cooldown_bars,
+                update_weapon_cooldown_bars,
             ));
     }
 }
@@ -129,6 +153,7 @@ pub fn spawn_entity_from_data(
 				..default()
 			},
 			Transform::from_xyz(0.0, 0.0, 1.0),
+			WeaponName(weapon_data.name.clone()),
 		));
 
 		// Add components based on behaviors
@@ -487,6 +512,135 @@ fn update_shock_waves(
 
         if shock_wave.distance_traveled >= shock_wave.max_distance {
             commands.entity(entity).despawn();
+        }
+    }
+}
+
+// ============ Weapon Cooldown UI Systems ============
+
+fn spawn_weapon_cooldown_bars(
+    mut commands: Commands,
+    projectile_weapons: Query<(Entity, &WeaponName), (With<crate::behaviors::ProjectileSpawner>, Without<HasCooldownUI>)>,
+    melee_weapons: Query<(Entity, &WeaponName), (With<crate::behaviors::MeleeAttack>, Without<HasCooldownUI>)>,
+    existing_projectile_weapons: Query<Entity, (With<crate::behaviors::ProjectileSpawner>, With<HasCooldownUI>)>,
+    existing_melee_weapons: Query<Entity, (With<crate::behaviors::MeleeAttack>, With<HasCooldownUI>)>,
+) {
+    const BAR_WIDTH: f32 = 200.0;
+    const BAR_HEIGHT: f32 = 15.0;
+    const BAR_START_Y: f32 = 10.0;
+    const BAR_SPACING: f32 = 25.0;
+
+    // Start bar index after existing weapons
+    let mut bar_index = existing_projectile_weapons.iter().count() + existing_melee_weapons.iter().count();
+
+    // Spawn bars for projectile weapons
+    for (entity, weapon_name) in projectile_weapons.iter() {
+        spawn_cooldown_bar(&mut commands, entity, &weapon_name.0, bar_index, BAR_WIDTH, BAR_HEIGHT, BAR_START_Y, BAR_SPACING);
+        bar_index += 1;
+    }
+
+    // Spawn bars for melee weapons
+    for (entity, weapon_name) in melee_weapons.iter() {
+        spawn_cooldown_bar(&mut commands, entity, &weapon_name.0, bar_index, BAR_WIDTH, BAR_HEIGHT, BAR_START_Y, BAR_SPACING);
+        bar_index += 1;
+    }
+}
+
+fn spawn_cooldown_bar(
+    commands: &mut Commands,
+    weapon_entity: Entity,
+    weapon_name: &str,
+    index: usize,
+    bar_width: f32,
+    bar_height: f32,
+    start_y: f32,
+    spacing: f32,
+) {
+    let y_position = start_y + (index as f32 * spacing);
+
+    // Mark weapon as having UI
+    commands.entity(weapon_entity).insert(HasCooldownUI);
+
+    // Spawn background bar
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(y_position),
+            right: Val::Px(10.0),
+            width: Val::Px(bar_width),
+            height: Val::Px(bar_height),
+            ..default()
+        },
+        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+        ZIndex(10),
+        WeaponCooldownBar {
+            weapon_entity,
+            weapon_name: weapon_name.to_string(),
+        },
+        WeaponCooldownBarBackground,
+    ));
+
+    // Spawn foreground bar (fills up as cooldown progresses)
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(y_position),
+            right: Val::Px(10.0),
+            width: Val::Px(0.0),
+            height: Val::Px(bar_height),
+            ..default()
+        },
+        BackgroundColor(Color::srgb(0.3, 0.7, 0.3)),
+        ZIndex(11),
+        WeaponCooldownBar {
+            weapon_entity,
+            weapon_name: weapon_name.to_string(),
+        },
+        WeaponCooldownBarForeground,
+    ));
+
+    // Spawn text label
+    commands.spawn((
+        Text::new(weapon_name),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(y_position - 2.0),
+            right: Val::Px(15.0),
+            ..default()
+        },
+        TextColor(Color::WHITE),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        ZIndex(12),
+        WeaponCooldownBar {
+            weapon_entity,
+            weapon_name: weapon_name.to_string(),
+        },
+        WeaponCooldownText,
+    ));
+}
+
+fn update_weapon_cooldown_bars(
+    projectile_weapons: Query<(Entity, &crate::behaviors::ProjectileSpawner)>,
+    melee_weapons: Query<(Entity, &crate::behaviors::MeleeAttack)>,
+    mut bars: Query<(&WeaponCooldownBar, &mut Node), With<WeaponCooldownBarForeground>>,
+) {
+    const BAR_WIDTH: f32 = 200.0;
+
+    for (bar, mut node) in bars.iter_mut() {
+        // Check if it's a projectile weapon
+        if let Ok((_, spawner)) = projectile_weapons.get(bar.weapon_entity) {
+            let progress = spawner.cooldown.fraction();
+            node.width = Val::Px(BAR_WIDTH * progress);
+            continue;
+        }
+
+        // Check if it's a melee weapon
+        if let Ok((_, melee)) = melee_weapons.get(bar.weapon_entity) {
+            let progress = melee.cooldown.fraction();
+            node.width = Val::Px(BAR_WIDTH * progress);
         }
     }
 }
