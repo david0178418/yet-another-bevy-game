@@ -173,3 +173,12 @@ pub enum BehaviorData {
 pub struct DespawnOnTimer {
 	pub timer: Timer,
 }
+
+// ============ Weapon Tracking Components ============
+
+#[derive(Component)]
+#[allow(dead_code)]  // Used for weapon tracking, not accessed directly
+pub struct WeaponId(pub String);
+
+#[derive(Component, Clone, Copy)]
+pub struct WeaponLevel(pub u32);

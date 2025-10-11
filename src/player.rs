@@ -212,17 +212,27 @@ fn spawn_initial_weapon(
 	mut player_query: Query<(Entity, &NeedsInitialWeapon)>,
 	weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
 	weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
+	mut weapon_inventory: Option<ResMut<crate::weapons::WeaponInventory>>,
 ) {
 	let Some(registry) = weapon_registry else { return };
 
 	for (entity, needs_weapon) in player_query.iter_mut() {
 		if let Some(handle) = registry.get(&needs_weapon.weapon_id) {
 			if let Some(weapon_data) = weapon_data_assets.get(handle) {
-				crate::weapons::spawn_entity_from_data(
+				let weapon_entities = crate::weapons::spawn_entity_from_data(
 					&mut commands,
 					weapon_data,
 					needs_weapon.count,
+					&needs_weapon.weapon_id,
 				);
+
+				// Add to inventory
+				if let Some(inventory) = &mut weapon_inventory {
+					if !weapon_entities.is_empty() {
+						inventory.weapons.insert(needs_weapon.weapon_id.clone(), (weapon_entities[0], 1));
+					}
+				}
+
 				commands.entity(entity).remove::<NeedsInitialWeapon>();
 			}
 		}

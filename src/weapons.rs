@@ -59,6 +59,11 @@ impl WeaponRegistry {
 }
 
 #[derive(Resource, Default)]
+pub struct WeaponInventory {
+	pub weapons: std::collections::HashMap<String, (Entity, u32)>, // weapon_id -> (entity, level)
+}
+
+#[derive(Resource, Default)]
 struct OrbitingEntityCount(usize);
 
 // UI Components for weapon cooldowns
@@ -87,6 +92,7 @@ impl Plugin for WeaponsPlugin {
         app.init_asset::<WeaponData>()
             .init_asset_loader::<WeaponDataLoader>()
             .init_resource::<OrbitingEntityCount>()
+            .init_resource::<WeaponInventory>()
             .add_systems(Update, (
                 initialize_weapon_registry,
                 redistribute_orbiting_entities,
@@ -130,13 +136,61 @@ fn initialize_weapon_registry(
 	commands.insert_resource(WeaponRegistry { weapons });
 }
 
+// Upgrade an existing weapon by level
+pub fn upgrade_weapon(
+	commands: &mut Commands,
+	entity: Entity,
+	weapon_level: &mut crate::behaviors::WeaponLevel,
+	melee_query: Option<&mut crate::behaviors::MeleeAttack>,
+	projectile_query: Option<&mut crate::behaviors::ProjectileSpawner>,
+) {
+	weapon_level.0 += 1;
+	let level = weapon_level.0;
+
+	// Damage scaling: +20% per level
+	let damage_multiplier = 1.0 + (level as f32 - 1.0) * 0.2;
+
+	// Cooldown scaling: -10% per level (faster attacks, minimum 50% cooldown)
+	let cooldown_multiplier = (1.0 - (level as f32 - 1.0) * 0.1).max(0.5);
+
+	if let Some(melee) = melee_query {
+		// Upgrade melee weapon stats
+		let base_damage = melee.damage / (1.0 + ((level - 1) as f32 - 1.0) * 0.2); // Reverse previous scaling
+		melee.damage = base_damage * damage_multiplier;
+
+		let base_cooldown = melee.cooldown.duration().as_secs_f32() / ((1.0 - ((level - 1) as f32 - 1.0) * 0.1).max(0.5));
+		let new_cooldown = base_cooldown * cooldown_multiplier;
+		melee.cooldown.set_duration(std::time::Duration::from_secs_f32(new_cooldown));
+
+		// Stun duration increases 15% per level
+		let stun_multiplier = 1.0 + (level as f32 - 1.0) * 0.15;
+		let base_stun = melee.stun_duration / (1.0 + ((level - 1) as f32 - 1.0) * 0.15);
+		melee.stun_duration = base_stun * stun_multiplier;
+	}
+
+	if let Some(projectile) = projectile_query {
+		// Upgrade projectile weapon stats
+		let base_damage = projectile.projectile_template.damage / (1.0 + ((level - 1) as f32 - 1.0) * 0.2);
+		projectile.projectile_template.damage = base_damage * damage_multiplier;
+
+		let base_cooldown = projectile.cooldown.duration().as_secs_f32() / ((1.0 - ((level - 1) as f32 - 1.0) * 0.1).max(0.5));
+		let new_cooldown = base_cooldown * cooldown_multiplier;
+		projectile.cooldown.set_duration(std::time::Duration::from_secs_f32(new_cooldown));
+	}
+
+	commands.entity(entity).insert(*weapon_level);
+}
+
 // Generic spawn function that creates entities from weapon data
 pub fn spawn_entity_from_data(
     commands: &mut Commands,
     weapon_data: &WeaponData,
     count: u32,
-) {
+    weapon_id: &str,
+) -> Vec<Entity> {
 	use crate::behaviors::*;
+
+	let mut entities = Vec::new();
 
 	for _ in 0..count {
 		let mut entity_commands = commands.spawn((
@@ -154,6 +208,8 @@ pub fn spawn_entity_from_data(
 			},
 			Transform::from_xyz(0.0, 0.0, 1.0),
 			WeaponName(weapon_data.name.clone()),
+			WeaponId(weapon_id.to_string()),
+			WeaponLevel(1),
 		));
 
 		// Add components based on behaviors
@@ -226,7 +282,12 @@ pub fn spawn_entity_from_data(
 				}
 			}
 		}
+
+		let entity_id = entity_commands.id();
+		entities.push(entity_id);
 	}
+
+	entities
 }
 
 // Generic update system for orbiting entities
