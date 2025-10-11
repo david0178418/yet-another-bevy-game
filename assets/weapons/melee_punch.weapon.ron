@@ -13,7 +13,7 @@
 			damage: 50.0,
 			stun_duration: 0.3,
 			knockback_force: 400.0,
-			attack_duration: 0.05,
+			attack_duration: 0.75,
 			hitbox_size: (40.0, 80.0),
 			hitbox_color: (0.9, 0.3, 0.3),
 		),
