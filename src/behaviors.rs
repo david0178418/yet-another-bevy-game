@@ -99,35 +99,36 @@ pub enum SpawnLogic {
 pub struct MeleeAttack {
 	pub cooldown: Timer,
 	pub detection_range: f32,
-	pub dash_distance: f32,
-	pub shock_wave_damage: f32,
-	pub shock_wave_size: (f32, f32),
-	pub shock_wave_speed: f32,
-	pub shock_wave_travel_distance: f32,
-	pub shock_wave_color: (f32, f32, f32),
-}
-
-#[derive(Component)]
-pub struct DashState {
-	pub distance_traveled: f32,
-	pub dash_distance: f32,
-	pub direction: Vec2,
-	pub shock_wave_params: ShockWaveParams,
-}
-
-#[derive(Clone)]
-pub struct ShockWaveParams {
 	pub damage: f32,
-	pub size: (f32, f32),
-	pub speed: f32,
-	pub travel_distance: f32,
-	pub color: (f32, f32, f32),
+	pub stun_duration: f32,
+	pub knockback_force: f32,
+	pub attack_duration: f32,
+	pub hitbox_size: (f32, f32),
+	pub hitbox_color: (f32, f32, f32),
 }
 
 #[derive(Component)]
-pub struct ShockWave {
-	pub distance_traveled: f32,
-	pub max_distance: f32,
+pub struct MeleeAttackState {
+	pub attack_timer: Timer,
+	pub damage: f32,
+	pub stun_duration: f32,
+	pub knockback_force: f32,
+	pub hitbox_size: (f32, f32),
+	pub hitbox_color: (f32, f32, f32),
+	pub attack_direction: Vec2,
+}
+
+#[derive(Component)]
+pub struct MeleeHitbox {
+	pub damage: f32,
+	pub stun_duration: f32,
+	pub knockback_force: f32,
+	pub hit_entities: Vec<Entity>,
+}
+
+#[derive(Component)]
+pub struct Stunned {
+	pub timer: Timer,
 }
 
 // ============ Data Structures for Deserialization ============
@@ -156,14 +157,12 @@ pub enum BehaviorData {
 	MeleeAttack {
 		cooldown: f32,
 		detection_range: f32,
-		#[allow(dead_code)]  // Configured in data but constant MELEE_DASH_SPEED used for consistent physics
-		dash_speed: f32,
-		dash_distance: f32,
-		shock_wave_damage: f32,
-		shock_wave_size: (f32, f32),
-		shock_wave_speed: f32,
-		shock_wave_travel_distance: f32,
-		shock_wave_color: (f32, f32, f32),
+		damage: f32,
+		stun_duration: f32,
+		knockback_force: f32,
+		attack_duration: f32,
+		hitbox_size: (f32, f32),
+		hitbox_color: (f32, f32, f32),
 	},
 	FollowPlayer,
 }

@@ -84,8 +84,20 @@ pub const WEAPON_RANGE_BOOST_AMOUNT: f32 = 100.0;
 
 // ============ Melee Attack Constants ============
 
-// Dash speed constant for consistent physics feel across all melee weapons
-pub const MELEE_DASH_SPEED: f32 = 800.0;
+// Movement speed when tracking enemies during melee attacks
+pub const MELEE_TRACKING_SPEED: f32 = 800.0;
+
+// How long the melee attack animation/hitbox lasts
+#[allow(dead_code)]  // Configured in weapon data files
+pub const MELEE_ATTACK_DURATION: f32 = 0.2;
+
+// How long enemies remain stunned after being hit
+#[allow(dead_code)]  // Configured in weapon data files
+pub const MELEE_STUN_DURATION: f32 = 0.3;
+
+// Force applied to knock back enemies
+#[allow(dead_code)]  // Configured in weapon data files
+pub const MELEE_KNOCKBACK_FORCE: f32 = 400.0;
 
 // ============ Platform Constants ============
 

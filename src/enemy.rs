@@ -225,11 +225,16 @@ fn spawn_enemies(
 }
 
 fn move_enemies(
-    mut enemy_query: Query<(&Transform, &mut crate::physics::Velocity, &Enemy), Without<crate::player::Player>>,
+    mut enemy_query: Query<(&Transform, &mut crate::physics::Velocity, &Enemy, Has<crate::behaviors::Stunned>), Without<crate::player::Player>>,
     player_query: Query<&Transform, With<crate::player::Player>>,
 ) {
     if let Ok(player_transform) = player_query.single() {
-        for (enemy_transform, mut velocity, enemy) in enemy_query.iter_mut() {
+        for (enemy_transform, mut velocity, enemy, is_stunned) in enemy_query.iter_mut() {
+            // Skip stunned enemies - they shouldn't move toward player
+            if is_stunned {
+                continue;
+            }
+
             let direction = (player_transform.translation.x - enemy_transform.translation.x).signum();
             velocity.x = direction * enemy.speed;
         }
