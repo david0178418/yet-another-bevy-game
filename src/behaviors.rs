@@ -93,6 +93,45 @@ pub enum SpawnLogic {
 	Fixed(f32, f32),
 }
 
+// ============ Melee Behaviors ============
+
+#[derive(Component)]
+pub struct MeleeAttack {
+	pub cooldown: Timer,
+	pub detection_range: f32,
+	pub dash_speed: f32,
+	pub dash_distance: f32,
+	pub shock_wave_damage: f32,
+	pub shock_wave_size: (f32, f32),
+	pub shock_wave_speed: f32,
+	pub shock_wave_travel_distance: f32,
+	pub shock_wave_color: (f32, f32, f32),
+}
+
+#[derive(Component)]
+pub struct DashState {
+	pub target_position: Vec3,
+	pub start_position: Vec3,
+	pub distance_traveled: f32,
+	pub direction: Vec2,
+	pub shock_wave_params: ShockWaveParams,
+}
+
+#[derive(Clone)]
+pub struct ShockWaveParams {
+	pub damage: f32,
+	pub size: (f32, f32),
+	pub speed: f32,
+	pub travel_distance: f32,
+	pub color: (f32, f32, f32),
+}
+
+#[derive(Component)]
+pub struct ShockWave {
+	pub distance_traveled: f32,
+	pub max_distance: f32,
+}
+
 // ============ Data Structures for Deserialization ============
 
 #[derive(Deserialize, Clone)]
@@ -115,6 +154,17 @@ pub enum BehaviorData {
 		projectile_color: (f32, f32, f32),
 		spawn_logic: SpawnLogic,
 		fire_range: Option<f32>,
+	},
+	MeleeAttack {
+		cooldown: f32,
+		detection_range: f32,
+		dash_speed: f32,
+		dash_distance: f32,
+		shock_wave_damage: f32,
+		shock_wave_size: (f32, f32),
+		shock_wave_speed: f32,
+		shock_wave_travel_distance: f32,
+		shock_wave_color: (f32, f32, f32),
 	},
 	FollowPlayer,
 }

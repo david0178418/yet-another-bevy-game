@@ -1,0 +1,22 @@
+(
+	name: "Melee Punch",
+	description: "Dashes to nearby enemies and creates a shock wave that damages all enemies in its path",
+	visual: (
+		size: (0.0, 0.0),  // Invisible
+		color: (0.0, 0.0, 0.0),
+	),
+	behaviors: [
+		FollowPlayer,
+		MeleeAttack(
+			cooldown: 1.0,
+			detection_range: 75.0,
+			dash_speed: 800.0,
+			dash_distance: 25.0,
+			shock_wave_damage: 300.0,
+			shock_wave_size: (40.0, 80.0),
+			shock_wave_speed: 800.0,
+			shock_wave_travel_distance: 50.0,
+			shock_wave_color: (0.9, 0.3, 0.3),
+		),
+	],
+)

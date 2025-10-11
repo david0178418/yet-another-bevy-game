@@ -72,6 +72,9 @@ impl Plugin for WeaponsPlugin {
                 update_orbiting_entities,
                 update_projectile_spawners,
                 update_despawn_timers,
+                detect_melee_targets,
+                execute_dash,
+                update_shock_waves,
             ));
     }
 }
@@ -166,6 +169,31 @@ pub fn spawn_entity_from_data(
 						},
 						spawn_logic: spawn_logic.clone(),
 						fire_range: *fire_range,
+					});
+				}
+				BehaviorData::MeleeAttack {
+					cooldown,
+					detection_range,
+					dash_speed,
+					dash_distance,
+					shock_wave_damage,
+					shock_wave_size,
+					shock_wave_speed,
+					shock_wave_travel_distance,
+					shock_wave_color,
+				} => {
+					let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
+					timer.tick(std::time::Duration::from_secs_f32(*cooldown)); // Start ready to fire
+					entity_commands.insert(MeleeAttack {
+						cooldown: timer,
+						detection_range: *detection_range,
+						dash_speed: *dash_speed,
+						dash_distance: *dash_distance,
+						shock_wave_damage: *shock_wave_damage,
+						shock_wave_size: *shock_wave_size,
+						shock_wave_speed: *shock_wave_speed,
+						shock_wave_travel_distance: *shock_wave_travel_distance,
+						shock_wave_color: *shock_wave_color,
 					});
 				}
 				BehaviorData::FollowPlayer => {
@@ -312,6 +340,152 @@ fn update_despawn_timers(
 ) {
     for (entity, mut despawn_timer) in query.iter_mut() {
         if despawn_timer.timer.tick(time.delta()).just_finished() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+// ============ Melee Attack Systems ============
+
+fn detect_melee_targets(
+    mut commands: Commands,
+    mut melee_query: Query<&mut crate::behaviors::MeleeAttack, With<crate::behaviors::FollowPlayer>>,
+    player_query: Query<(Entity, &Transform), With<crate::behaviors::PlayerTag>>,
+    dash_query: Query<&crate::behaviors::DashState, With<crate::behaviors::PlayerTag>>,
+    enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
+    time: Res<Time<Virtual>>,
+) {
+    use crate::behaviors::*;
+
+    // Don't trigger new melee attacks while dashing
+    if !dash_query.is_empty() {
+        return;
+    }
+
+    if let Ok((player_entity, player_transform)) = player_query.single() {
+        for mut melee in melee_query.iter_mut() {
+            melee.cooldown.tick(time.delta());
+
+            // Find nearest enemy within detection range
+            let nearest_enemy = enemy_query.iter()
+                .filter(|enemy_transform| {
+                    player_transform.translation.distance(enemy_transform.translation) <= melee.detection_range
+                })
+                .min_by(|a, b| {
+                    let dist_a = player_transform.translation.distance(a.translation);
+                    let dist_b = player_transform.translation.distance(b.translation);
+                    dist_a.partial_cmp(&dist_b).unwrap()
+                });
+
+            // Only attack if cooldown is ready AND there's an enemy in range
+            if let Some(enemy_transform) = nearest_enemy {
+                if melee.cooldown.finished() {
+                    melee.cooldown.reset();
+
+                    // Calculate direction to enemy
+                    let direction = Vec2::new(
+                        enemy_transform.translation.x - player_transform.translation.x,
+                        enemy_transform.translation.y - player_transform.translation.y,
+                    ).normalize();
+
+                    // Calculate target position (dash toward enemy)
+                    let target_position = Vec3::new(
+                        player_transform.translation.x + direction.x * melee.dash_distance,
+                        player_transform.translation.y + direction.y * melee.dash_distance,
+                        player_transform.translation.z,
+                    );
+
+                    // Add DashState to player
+                    commands.entity(player_entity).insert(DashState {
+                        target_position,
+                        start_position: player_transform.translation,
+                        distance_traveled: 0.0,
+                        direction,
+                        shock_wave_params: ShockWaveParams {
+                            damage: melee.shock_wave_damage,
+                            size: melee.shock_wave_size,
+                            speed: melee.shock_wave_speed,
+                            travel_distance: melee.shock_wave_travel_distance,
+                            color: melee.shock_wave_color,
+                        },
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn execute_dash(
+    mut commands: Commands,
+    mut player_query: Query<(Entity, &mut Transform, &mut crate::physics::Velocity, &mut crate::behaviors::DashState), With<crate::behaviors::PlayerTag>>,
+    time: Res<Time<Virtual>>,
+) {
+    use crate::behaviors::*;
+
+    if let Ok((player_entity, mut player_transform, mut velocity, mut dash_state)) = player_query.single_mut() {
+        let dash_speed = crate::constants::MELEE_DASH_SPEED;
+        let delta_distance = dash_speed * time.delta_secs();
+
+        // Override velocity during dash
+        velocity.x = dash_state.direction.x * dash_speed;
+        velocity.y = dash_state.direction.y * dash_speed;
+
+        dash_state.distance_traveled += delta_distance;
+
+        // Check if dash is complete
+        if dash_state.distance_traveled >= crate::constants::MELEE_DASH_DISTANCE {
+            // Spawn shock wave
+            let angle = dash_state.direction.y.atan2(dash_state.direction.x);
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(
+                        dash_state.shock_wave_params.color.0,
+                        dash_state.shock_wave_params.color.1,
+                        dash_state.shock_wave_params.color.2,
+                    ),
+                    custom_size: Some(Vec2::new(
+                        dash_state.shock_wave_params.size.0,
+                        dash_state.shock_wave_params.size.1,
+                    )),
+                    ..default()
+                },
+                Transform::from_translation(player_transform.translation)
+                    .with_rotation(Quat::from_rotation_z(angle)),
+                crate::physics::Velocity {
+                    x: dash_state.direction.x * dash_state.shock_wave_params.speed,
+                    y: dash_state.direction.y * dash_state.shock_wave_params.speed,
+                },
+                DamageOnContact {
+                    damage: dash_state.shock_wave_params.damage,
+                    damage_type: DamageType::Continuous,
+                    targets: TargetFilter::Enemies,
+                },
+                ShockWave {
+                    distance_traveled: 0.0,
+                    max_distance: dash_state.shock_wave_params.travel_distance,
+                },
+            ));
+
+            // Stop dash - reset velocity to zero
+            velocity.x = 0.0;
+            velocity.y = 0.0;
+
+            // Remove dash state
+            commands.entity(player_entity).remove::<DashState>();
+        }
+    }
+}
+
+fn update_shock_waves(
+    mut commands: Commands,
+    mut shock_wave_query: Query<(Entity, &mut crate::behaviors::ShockWave, &crate::physics::Velocity)>,
+    time: Res<Time<Virtual>>,
+) {
+    for (entity, mut shock_wave, velocity) in shock_wave_query.iter_mut() {
+        let speed = (velocity.x * velocity.x + velocity.y * velocity.y).sqrt();
+        shock_wave.distance_traveled += speed * time.delta_secs();
+
+        if shock_wave.distance_traveled >= shock_wave.max_distance {
             commands.entity(entity).despawn();
         }
     }
