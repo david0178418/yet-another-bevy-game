@@ -9,6 +9,7 @@ pub fn detect_melee_targets(
 	player_query: Query<(Entity, &Transform), With<crate::behaviors::PlayerTag>>,
 	attack_query: Query<&crate::behaviors::MeleeAttackState, With<crate::behaviors::PlayerTag>>,
 	enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
+	active_weapon: Res<crate::weapons::ActiveWeaponState>,
 	time: Res<Time<Virtual>>,
 ) {
 	use crate::behaviors::*;
@@ -20,9 +21,14 @@ pub fn detect_melee_targets(
 
 	if let Ok((player_entity, player_transform)) = player_query.single() {
 		for mut melee in melee_query.iter_mut() {
-			// Only tick cooldown if it's not finished (actively cooling down)
+			// Always tick cooldown if it's not finished (actively cooling down)
 			if !melee.cooldown.is_finished() {
 				melee.cooldown.tick(time.delta());
+			}
+
+			// Only allow attacking if melee weapon is active
+			if active_weapon.active_slot != Some(WeaponSlot::Melee) {
+				continue;
 			}
 
 			// Find nearest enemy within detection range

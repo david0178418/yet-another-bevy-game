@@ -1,16 +1,21 @@
-use bevy::{asset::AssetLoader, prelude::*};
 use crate::behaviors::BehaviorData;
+use bevy::{asset::AssetLoader, prelude::*};
 use serde::Deserialize;
 
-mod upgrades;
+mod behaviors;
 mod melee;
 mod ui;
-mod behaviors;
+mod upgrades;
 
-pub use upgrades::{apply_weapon_upgrades, sync_weapon_stats};
-pub use melee::{detect_melee_targets, execute_melee_attack, update_melee_hitboxes, update_stunned_enemies};
+pub use behaviors::{
+	redistribute_orbiting_entities, update_despawn_timers, update_following_entities,
+	update_orbiting_entities, update_projectile_spawners, OrbitingEntityCount,
+};
+pub use melee::{
+	detect_melee_targets, execute_melee_attack, update_melee_hitboxes, update_stunned_enemies,
+};
 pub use ui::{spawn_weapon_cooldown_bars, update_weapon_cooldown_bars};
-pub use behaviors::{update_orbiting_entities, redistribute_orbiting_entities, update_projectile_spawners, update_despawn_timers, OrbitingEntityCount};
+pub use upgrades::{apply_weapon_upgrades, sync_weapon_stats};
 
 pub struct WeaponsPlugin;
 
@@ -74,6 +79,11 @@ pub struct WeaponInventory {
 	pub weapons: std::collections::HashMap<String, (Entity, u32)>, // weapon_id -> (entity, level)
 }
 
+#[derive(Resource, Default)]
+pub struct ActiveWeaponState {
+	pub active_slot: Option<crate::behaviors::WeaponSlot>,
+}
+
 #[derive(Component)]
 pub struct WeaponName(pub String);
 
@@ -83,12 +93,15 @@ impl Plugin for WeaponsPlugin {
 			.init_asset_loader::<WeaponDataLoader>()
 			.init_resource::<OrbitingEntityCount>()
 			.init_resource::<WeaponInventory>()
+			.init_resource::<ActiveWeaponState>()
 			.add_systems(
 				Update,
 				(
 					initialize_weapon_registry,
+					update_weapon_activation,
 					apply_weapon_upgrades,
 					sync_weapon_stats,
+					update_following_entities,
 					redistribute_orbiting_entities,
 					update_orbiting_entities,
 					update_projectile_spawners,
@@ -134,6 +147,30 @@ fn initialize_weapon_registry(
 	commands.insert_resource(WeaponRegistry { weapons });
 }
 
+fn update_weapon_activation(
+	keyboard: Res<ButtonInput<KeyCode>>,
+	gamepads: Query<&Gamepad>,
+	mut active_state: ResMut<ActiveWeaponState>,
+) {
+	use crate::behaviors::WeaponSlot;
+
+	// Check keyboard input
+	let melee_pressed =
+		keyboard.pressed(KeyCode::KeyQ) || gamepads.iter().any(|g| g.pressed(GamepadButton::West));
+	let ranged_pressed =
+		keyboard.pressed(KeyCode::KeyE) || gamepads.iter().any(|g| g.pressed(GamepadButton::East));
+
+	// Update active weapon slot based on input
+	// If both are pressed, prefer melee
+	active_state.active_slot = if melee_pressed {
+		Some(WeaponSlot::Melee)
+	} else if ranged_pressed {
+		Some(WeaponSlot::Ranged)
+	} else {
+		None
+	};
+}
+
 // Generic spawn function that creates entities from weapon data
 pub fn spawn_entity_from_data(
 	commands: &mut Commands,
@@ -144,6 +181,16 @@ pub fn spawn_entity_from_data(
 	use crate::behaviors::*;
 
 	let mut entities = Vec::new();
+
+	// Determine weapon slot based on behaviors
+	let weapon_slot = weapon_data
+		.behaviors
+		.iter()
+		.find_map(|behavior| match behavior {
+			BehaviorData::MeleeAttack { .. } => Some(WeaponSlot::Melee),
+			BehaviorData::ProjectileSpawner { .. } => Some(WeaponSlot::Ranged),
+			_ => None,
+		});
 
 	for _ in 0..count {
 		let mut entity_commands = commands.spawn((
@@ -164,6 +211,11 @@ pub fn spawn_entity_from_data(
 			WeaponId(weapon_id.to_string()),
 			WeaponLevel(1),
 		));
+
+		// Add weapon slot if applicable
+		if let Some(slot) = weapon_slot {
+			entity_commands.insert(slot);
+		}
 
 		// Add components based on behaviors
 		for behavior in &weapon_data.behaviors {

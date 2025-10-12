@@ -1,14 +1,18 @@
 (
 	weapon_ids: ["orbiting_blade", "auto_shooter", "melee_punch"],
 	enemy_ids: ["weak", "medium", "strong", "straight_flyer", "zigzag_flyer", "ranged_flyer", "ranged_ground", "exploder"],
-	initial_weapon: (
-		weapon_id: "orbiting_blade",
-		level: 1,
-	),
+	initial_weapons: [
+		(
+			weapon_id: "melee_punch",
+			level: 1,
+		),
+		(
+			weapon_id: "auto_shooter",
+			level: 1,
+		),
+	],
 	powerup_pool: [
 		Weapon("orbiting_blade"),
-		Weapon("auto_shooter"),
-		Weapon("melee_punch"),
 		StatBoost((
 			stat: Speed,
 			value: 50.0,

@@ -30,7 +30,11 @@ impl Plugin for CombatPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
 			Update,
-			(apply_contact_damage, handle_explosion_proximity, handle_damageable_death)
+			(
+				apply_contact_damage,
+				handle_explosion_proximity,
+				handle_damageable_death,
+			)
 				.after(crate::physics::PhysicsSet)
 				.before(crate::physics::CollisionResolutionSet),
 		);
@@ -96,18 +100,16 @@ fn apply_contact_damage(
 // Explosion proximity system
 fn handle_explosion_proximity(
 	mut commands: Commands,
-	exploders: Query<(
-		Entity,
-		&Transform,
-		&crate::behaviors::ExplodeOnProximity,
-	)>,
+	exploders: Query<(Entity, &Transform, &crate::behaviors::ExplodeOnProximity)>,
 	mut targets: DamageableQuery,
 	health_bar_query: Query<(Entity, &crate::enemy::HealthBar)>,
 ) {
 	use crate::behaviors::TargetFilter;
 
 	for (exploder_entity, exploder_transform, explosion_behavior) in exploders.iter() {
-		for (target_transform, _target_sprite, mut damageable, is_enemy, is_player) in targets.iter_mut() {
+		for (target_transform, _target_sprite, mut damageable, is_enemy, is_player) in
+			targets.iter_mut()
+		{
 			// Check if target matches the explosion target filter
 			let target_matches = match explosion_behavior.targets {
 				TargetFilter::Enemies => is_enemy,
@@ -119,7 +121,9 @@ fn handle_explosion_proximity(
 				continue;
 			}
 
-			let distance = exploder_transform.translation.distance(target_transform.translation);
+			let distance = exploder_transform
+				.translation
+				.distance(target_transform.translation);
 
 			if distance <= explosion_behavior.trigger_range {
 				// Apply damage

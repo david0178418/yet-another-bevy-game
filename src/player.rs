@@ -33,9 +33,8 @@ impl Plugin for PlayerPlugin {
 }
 
 #[derive(Component)]
-struct NeedsInitialWeapon {
-	weapon_id: String,
-	count: u32,
+struct NeedsInitialWeapons {
+	weapons: Vec<crate::InitialWeapon>,
 }
 
 #[derive(Component)]
@@ -203,9 +202,8 @@ fn spawn_player(
 		crate::physics::Velocity { x: 0.0, y: 0.0 },
 		crate::physics::Grounded(false),
 		crate::physics::Collider,
-		NeedsInitialWeapon {
-			weapon_id: config_data.initial_weapon.weapon_id.clone(),
-			count: config_data.initial_weapon.level,
+		NeedsInitialWeapons {
+			weapons: config_data.initial_weapons.clone(),
 		},
 	));
 
@@ -222,7 +220,7 @@ fn spawn_player(
 
 fn spawn_initial_weapon(
 	mut commands: Commands,
-	mut player_query: Query<(Entity, &NeedsInitialWeapon)>,
+	mut player_query: Query<(Entity, &NeedsInitialWeapons)>,
 	weapon_registry: Option<Res<crate::weapons::WeaponRegistry>>,
 	weapon_data_assets: Res<Assets<crate::weapons::WeaponData>>,
 	mut weapon_inventory: Option<ResMut<crate::weapons::WeaponInventory>>,
@@ -231,28 +229,33 @@ fn spawn_initial_weapon(
 		return;
 	};
 
-	for (entity, needs_weapon) in player_query.iter_mut() {
-		if let Some(handle) = registry.get(&needs_weapon.weapon_id) {
-			if let Some(weapon_data) = weapon_data_assets.get(handle) {
-				let weapon_entities = crate::weapons::spawn_entity_from_data(
-					&mut commands,
-					weapon_data,
-					needs_weapon.count,
-					&needs_weapon.weapon_id,
-				);
+	for (entity, needs_weapons) in player_query.iter_mut() {
+		// Spawn each initial weapon
+		for weapon_config in &needs_weapons.weapons {
+			if let Some(handle) = registry.get(&weapon_config.weapon_id) {
+				if let Some(weapon_data) = weapon_data_assets.get(handle) {
+					let weapon_entities = crate::weapons::spawn_entity_from_data(
+						&mut commands,
+						weapon_data,
+						weapon_config.level,
+						&weapon_config.weapon_id,
+					);
 
-				// Add to inventory
-				if let Some(inventory) = &mut weapon_inventory {
-					if !weapon_entities.is_empty() {
-						inventory
-							.weapons
-							.insert(needs_weapon.weapon_id.clone(), (weapon_entities[0], 1));
+					// Add to inventory
+					if let Some(inventory) = &mut weapon_inventory {
+						if !weapon_entities.is_empty() {
+							inventory.weapons.insert(
+								weapon_config.weapon_id.clone(),
+								(weapon_entities[0], weapon_config.level),
+							);
+						}
 					}
 				}
-
-				commands.entity(entity).remove::<NeedsInitialWeapon>();
 			}
 		}
+
+		// Remove the component after spawning all weapons
+		commands.entity(entity).remove::<NeedsInitialWeapons>();
 	}
 }
 

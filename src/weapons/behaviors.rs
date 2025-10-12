@@ -4,6 +4,33 @@ use std::f32::consts::PI;
 #[derive(Resource, Default)]
 pub struct OrbitingEntityCount(pub usize);
 
+// System to update non-orbiting weapons that follow the player
+pub fn update_following_entities(
+	mut following_query: Query<
+		&mut Transform,
+		(
+			With<crate::behaviors::FollowPlayer>,
+			Without<crate::behaviors::OrbitingBehavior>,
+			Without<crate::behaviors::PlayerTag>,
+		),
+	>,
+	player_query: Query<
+		&Transform,
+		(
+			With<crate::behaviors::PlayerTag>,
+			Without<crate::behaviors::FollowPlayer>,
+		),
+	>,
+) {
+	if let Ok(player_transform) = player_query.single() {
+		for mut transform in following_query.iter_mut() {
+			// Simply match the player's position
+			transform.translation.x = player_transform.translation.x;
+			transform.translation.y = player_transform.translation.y;
+		}
+	}
+}
+
 // Generic update system for orbiting entities
 pub fn update_orbiting_entities(
 	mut orbiting_query: Query<(
@@ -64,6 +91,7 @@ pub fn update_projectile_spawners(
 		&mut crate::behaviors::ProjectileSpawner,
 		Has<crate::behaviors::PlayerTag>,
 		Has<crate::behaviors::EnemyTag>,
+		Option<&crate::behaviors::WeaponSlot>,
 	)>,
 	player_query: Query<
 		&Transform,
@@ -79,15 +107,28 @@ pub fn update_projectile_spawners(
 			Without<crate::behaviors::ProjectileSpawner>,
 		),
 	>,
+	active_weapon: Res<crate::weapons::ActiveWeaponState>,
 	time: Res<Time<Virtual>>,
 ) {
 	use crate::behaviors::*;
 
-	for (spawner_transform, mut spawner, is_player_weapon, is_enemy) in spawner_query.iter_mut() {
-		// Only tick if not finished (actively cooling down)
+	for (spawner_transform, mut spawner, is_player_tag, is_enemy, weapon_slot) in
+		spawner_query.iter_mut()
+	{
+		// Determine if this belongs to the player (for targeting logic)
+		let is_player_weapon = weapon_slot.is_some() || is_player_tag;
+
+		// Always tick cooldown if not finished (actively cooling down)
 		if !spawner.cooldown.is_finished() {
 			spawner.cooldown.tick(time.delta());
 			continue; // Skip to next weapon while cooling down
+		}
+
+		// If this is a player weapon with WeaponSlot::Ranged, check if it's active before firing
+		if let Some(WeaponSlot::Ranged) = weapon_slot {
+			if active_weapon.active_slot != Some(WeaponSlot::Ranged) {
+				continue; // Skip firing if ranged weapon is not active
+			}
 		}
 
 		// Cooldown is ready, try to fire
@@ -101,10 +142,10 @@ pub fn update_projectile_spawners(
 						.filter(|enemy_transform| {
 							// If fire_range is set, only consider enemies within range
 							if let Some(range) = spawner.fire_range {
-								spawner_transform
+								let distance = spawner_transform
 									.translation
-									.distance(enemy_transform.translation)
-									<= range
+									.distance(enemy_transform.translation);
+								distance <= range
 							} else {
 								true // No range limit
 							}

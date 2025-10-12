@@ -65,7 +65,7 @@ pub enum PowerupDefinition {
 pub struct GameConfigData {
 	pub weapon_ids: Vec<String>,
 	pub enemy_ids: Vec<String>,
-	pub initial_weapon: InitialWeapon,
+	pub initial_weapons: Vec<InitialWeapon>,
 	pub powerup_pool: Vec<PowerupDefinition>,
 }
 

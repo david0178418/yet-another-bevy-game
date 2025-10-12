@@ -238,6 +238,12 @@ pub struct WeaponId(pub String);
 #[derive(Component, Clone, Copy)]
 pub struct WeaponLevel(pub u32);
 
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WeaponSlot {
+	Melee,
+	Ranged,
+}
+
 // ============ Weapon Stat Components ============
 // Each weapon composes only the stats it needs
 
