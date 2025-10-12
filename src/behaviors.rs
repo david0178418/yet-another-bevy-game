@@ -88,7 +88,7 @@ pub struct ProjectileTag;
 // ============ Range Detection ============
 
 #[derive(Component)]
-#[allow(dead_code)]  // Reserved for future use (XP attraction, pickups, area triggers)
+#[allow(dead_code)] // Reserved for future use (XP attraction, pickups, area triggers)
 pub struct ProximityDetector {
 	pub range: f32,
 	pub target_filter: TargetFilter,
@@ -101,7 +101,7 @@ pub struct ProjectileSpawner {
 	pub cooldown: Timer,
 	pub projectile_template: ProjectileTemplate,
 	pub spawn_logic: SpawnLogic,
-	pub fire_range: Option<f32>,  // None = infinite range
+	pub fire_range: Option<f32>, // None = infinite range
 }
 
 #[derive(Clone)]
@@ -218,7 +218,7 @@ pub struct DespawnOnTimer {
 // ============ Weapon Tracking Components ============
 
 #[derive(Component)]
-#[allow(dead_code)]  // Used for weapon tracking, not accessed directly
+#[allow(dead_code)] // Used for weapon tracking, not accessed directly
 pub struct WeaponId(pub String);
 
 #[derive(Component, Clone, Copy)]
@@ -239,7 +239,7 @@ pub struct CooldownStats {
 
 #[derive(Component, Clone, Copy)]
 pub struct EffectStats {
-	pub base: f32,  // For melee: stun duration, for projectiles: speed, etc.
+	pub base: f32, // For melee: stun duration, for projectiles: speed, etc.
 }
 
 // ============ Upgrade Behavior System ============

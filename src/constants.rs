@@ -77,15 +77,15 @@ pub const POWERUP_COLOR_HOVERED: Color = Color::srgb(0.3, 0.3, 0.4);
 
 // ============ Weapon Constants ============
 
-#[allow(dead_code)]  // Documentation constant for auto_shooter.weapon.ron fire_range
+#[allow(dead_code)] // Documentation constant for auto_shooter.weapon.ron fire_range
 pub const AUTO_SHOOTER_DEFAULT_RANGE: f32 = 400.0;
 
-#[allow(dead_code)]  // Reserved for future weapon range powerups
+#[allow(dead_code)] // Reserved for future weapon range powerups
 pub const WEAPON_RANGE_BOOST_AMOUNT: f32 = 100.0;
 
 // Weapon upgrade scaling per level
 // Note: Upgrade behaviors are now defined in weapon data files (upgrade_behaviors field)
-pub const WEAPON_DAMAGE_INCREASE_PER_LEVEL: f32 = 0.2;  // +20% damage per level (default for sync)
+pub const WEAPON_DAMAGE_INCREASE_PER_LEVEL: f32 = 0.2; // +20% damage per level (default for sync)
 
 // ============ Melee Attack Constants ============
 
@@ -93,15 +93,15 @@ pub const WEAPON_DAMAGE_INCREASE_PER_LEVEL: f32 = 0.2;  // +20% damage per level
 pub const MELEE_TRACKING_SPEED: f32 = 800.0;
 
 // How long the melee attack animation/hitbox lasts
-#[allow(dead_code)]  // Configured in weapon data files
+#[allow(dead_code)] // Configured in weapon data files
 pub const MELEE_ATTACK_DURATION: f32 = 0.2;
 
 // How long enemies remain stunned after being hit
-#[allow(dead_code)]  // Configured in weapon data files
+#[allow(dead_code)] // Configured in weapon data files
 pub const MELEE_STUN_DURATION: f32 = 0.3;
 
 // Force applied to knock back enemies
-#[allow(dead_code)]  // Configured in weapon data files
+#[allow(dead_code)] // Configured in weapon data files
 pub const MELEE_KNOCKBACK_FORCE: f32 = 400.0;
 
 // ============ Platform Constants ============

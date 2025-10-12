@@ -1,25 +1,31 @@
-use bevy::{prelude::*, ui::UiScale, window::{WindowResized, WindowResolution, PresentMode}, asset::AssetLoader, camera::{Viewport, ScalingMode}};
+use bevy::{
+	asset::AssetLoader,
+	camera::{ScalingMode, Viewport},
+	prelude::*,
+	ui::UiScale,
+	window::{PresentMode, WindowResized, WindowResolution},
+};
 use serde::Deserialize;
 
-mod player;
-mod physics;
-mod enemy;
-mod weapons;
-mod experience;
-mod powerups;
-mod combat;
 mod behaviors;
-mod movement;
+mod combat;
 mod constants;
+mod enemy;
+mod experience;
+mod movement;
+mod physics;
+mod player;
+mod powerups;
+mod weapons;
 
-use player::PlayerPlugin;
-use physics::PhysicsPlugin;
-use enemy::EnemyPlugin;
-use weapons::WeaponsPlugin;
-use experience::ExperiencePlugin;
-use powerups::PowerupsPlugin;
 use combat::CombatPlugin;
+use enemy::EnemyPlugin;
+use experience::ExperiencePlugin;
 use movement::MovementPlugin;
+use physics::PhysicsPlugin;
+use player::PlayerPlugin;
+use powerups::PowerupsPlugin;
+use weapons::WeaponsPlugin;
 
 const GAME_WIDTH: f32 = 1280.0;
 const GAME_HEIGHT: f32 = 720.0;
@@ -54,7 +60,6 @@ pub enum PowerupDefinition {
 	Weapon(String),
 	StatBoost(StatBoostData),
 }
-
 
 #[derive(Asset, TypePath, Deserialize, Clone)]
 pub struct GameConfigData {
