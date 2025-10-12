@@ -30,7 +30,7 @@ impl Plugin for CombatPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
 			Update,
-			(apply_contact_damage, handle_damageable_death)
+			(apply_contact_damage, handle_explosion_proximity, handle_damageable_death)
 				.after(crate::physics::PhysicsSet)
 				.before(crate::physics::CollisionResolutionSet),
 		);
@@ -88,6 +88,69 @@ fn apply_contact_damage(
 						break; // Stop after first hit
 					}
 				}
+			}
+		}
+	}
+}
+
+// Explosion proximity system
+fn handle_explosion_proximity(
+	mut commands: Commands,
+	exploders: Query<(
+		Entity,
+		&Transform,
+		&crate::behaviors::ExplodeOnProximity,
+	)>,
+	mut targets: DamageableQuery,
+	health_bar_query: Query<(Entity, &crate::enemy::HealthBar)>,
+) {
+	use crate::behaviors::TargetFilter;
+
+	for (exploder_entity, exploder_transform, explosion_behavior) in exploders.iter() {
+		for (target_transform, _target_sprite, mut damageable, is_enemy, is_player) in targets.iter_mut() {
+			// Check if target matches the explosion target filter
+			let target_matches = match explosion_behavior.targets {
+				TargetFilter::Enemies => is_enemy,
+				TargetFilter::Player => is_player,
+				TargetFilter::All => true,
+			};
+
+			if !target_matches {
+				continue;
+			}
+
+			let distance = exploder_transform.translation.distance(target_transform.translation);
+
+			if distance <= explosion_behavior.trigger_range {
+				// Apply damage
+				damageable.health -= explosion_behavior.damage;
+
+				// Spawn explosion visual effect
+				let explosion_size = explosion_behavior.trigger_range * 2.0;
+				commands.spawn((
+					Sprite {
+						color: Color::srgba(1.0, 0.5, 0.0, 0.7), // Orange with transparency
+						custom_size: Some(Vec2::new(explosion_size, explosion_size)),
+						..default()
+					},
+					Transform::from_translation(exploder_transform.translation),
+					crate::behaviors::DespawnOnTimer {
+						timer: Timer::from_seconds(0.15, TimerMode::Once),
+					},
+				));
+
+				// Despawn health bars associated with this exploder
+				for (bar_entity, health_bar) in health_bar_query.iter() {
+					if health_bar.enemy_entity == exploder_entity {
+						commands.entity(bar_entity).despawn();
+					}
+				}
+
+				// Despawn the exploder
+				commands.entity(exploder_entity).despawn();
+
+				// Only trigger once
+				break;
 			}
 		}
 	}

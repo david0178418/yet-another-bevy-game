@@ -228,6 +228,17 @@ fn apply_enemy_behaviors(
 					fire_range: *fire_range,
 				});
 			}
+			BehaviorData::ExplodeOnProximity {
+				trigger_range,
+				damage,
+				targets,
+			} => {
+				entity_commands.insert(ExplodeOnProximity {
+					trigger_range: *trigger_range,
+					damage: *damage,
+					targets: *targets,
+				});
+			}
 			_ => {
 				// Other behaviors (Orbiting, MeleeAttack, FollowPlayer) are not used by enemies
 			}

@@ -94,6 +94,15 @@ pub struct ProximityDetector {
 	pub target_filter: TargetFilter,
 }
 
+// ============ Explosion Behaviors ============
+
+#[derive(Component)]
+pub struct ExplodeOnProximity {
+	pub trigger_range: f32,
+	pub damage: f32,
+	pub targets: TargetFilter,
+}
+
 // ============ Spawning Behaviors ============
 
 #[derive(Component)]
@@ -205,6 +214,11 @@ pub enum BehaviorData {
 		target_type: TargetType,
 		preferred_distance: f32,
 		speed: f32,
+	},
+	ExplodeOnProximity {
+		trigger_range: f32,
+		damage: f32,
+		targets: TargetFilter,
 	},
 }
 

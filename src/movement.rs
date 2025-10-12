@@ -27,6 +27,7 @@ impl Plugin for MovementPlugin {
 
 fn update_seek_target_entities(
 	mut seek_query: Query<(
+		&Transform,
 		&mut crate::physics::Velocity,
 		&crate::behaviors::SeekTarget,
 		Has<crate::behaviors::Stunned>,
@@ -36,7 +37,7 @@ fn update_seek_target_entities(
 ) {
 	use crate::behaviors::TargetType;
 
-	for (mut velocity, seek, is_stunned) in seek_query.iter_mut() {
+	for (transform, mut velocity, seek, is_stunned) in seek_query.iter_mut() {
 		if is_stunned {
 			continue;
 		}
@@ -46,15 +47,19 @@ fn update_seek_target_entities(
 			TargetType::NearestEnemy => enemy_query
 				.iter()
 				.min_by(|(_, a), (_, b)| {
-					let dist_a = a.translation.length();
-					let dist_b = b.translation.length();
+					let dist_a = (a.translation - transform.translation).length();
+					let dist_b = (b.translation - transform.translation).length();
 					dist_a.partial_cmp(&dist_b).unwrap()
 				})
 				.map(|(_, t)| t.translation),
 		};
 
 		if let Some(target_pos) = target_position {
-			let direction = Vec2::new(target_pos.x, target_pos.y).normalize_or_zero();
+			let direction = Vec2::new(
+				target_pos.x - transform.translation.x,
+				target_pos.y - transform.translation.y,
+			)
+			.normalize_or_zero();
 			velocity.x = direction.x * seek.speed;
 			velocity.y = direction.y * seek.speed;
 		}

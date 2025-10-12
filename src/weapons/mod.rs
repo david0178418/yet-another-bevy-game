@@ -280,6 +280,9 @@ pub fn spawn_entity_from_data(
 						speed: *speed,
 					});
 				}
+				BehaviorData::ExplodeOnProximity { .. } => {
+					// ExplodeOnProximity is not used by weapons
+				}
 			}
 		}
 
