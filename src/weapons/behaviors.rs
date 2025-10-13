@@ -111,13 +111,7 @@ pub fn update_projectile_spawners(
 			Without<crate::behaviors::ProjectileSpawner>,
 		),
 	>,
-	enemy_query: Query<
-		&Transform,
-		(
-			With<crate::behaviors::EnemyTag>,
-			Without<crate::behaviors::ProjectileSpawner>,
-		),
-	>,
+	enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
 	active_weapon: Res<crate::weapons::ActiveWeaponState>,
 	time: Res<Time<Virtual>>,
 ) {
