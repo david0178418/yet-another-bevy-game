@@ -154,21 +154,27 @@ fn update_weapon_activation(
 ) {
 	use crate::behaviors::WeaponSlot;
 
-	// Check keyboard input
-	let melee_pressed =
-		keyboard.pressed(KeyCode::KeyQ) || gamepads.iter().any(|g| g.pressed(GamepadButton::West));
-	let ranged_pressed =
-		keyboard.pressed(KeyCode::KeyE) || gamepads.iter().any(|g| g.pressed(GamepadButton::East));
+	// Check for button press events (not holds)
+	let melee_just_pressed =
+		keyboard.just_pressed(KeyCode::KeyQ) || gamepads.iter().any(|g| g.just_pressed(GamepadButton::West));
+	let ranged_just_pressed =
+		keyboard.just_pressed(KeyCode::KeyE) || gamepads.iter().any(|g| g.just_pressed(GamepadButton::East));
 
-	// Update active weapon slot based on input
-	// If both are pressed, prefer melee
-	active_state.active_slot = if melee_pressed {
-		Some(WeaponSlot::Melee)
-	} else if ranged_pressed {
-		Some(WeaponSlot::Ranged)
-	} else {
-		None
-	};
+	// Toggle melee weapon (takes priority if both pressed)
+	if melee_just_pressed {
+		active_state.active_slot = if active_state.active_slot == Some(WeaponSlot::Melee) {
+			None // Deactivate if already active
+		} else {
+			Some(WeaponSlot::Melee) // Activate melee
+		};
+	} else if ranged_just_pressed {
+		// Toggle ranged weapon only if melee wasn't pressed
+		active_state.active_slot = if active_state.active_slot == Some(WeaponSlot::Ranged) {
+			None // Deactivate if already active
+		} else {
+			Some(WeaponSlot::Ranged) // Activate ranged
+		};
+	}
 }
 
 // Generic spawn function that creates entities from weapon data
