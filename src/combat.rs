@@ -165,6 +165,9 @@ fn handle_damageable_death(
 	mut commands: Commands,
 	query: DeathQuery,
 	health_bar_query: Query<(Entity, &crate::enemy::HealthBar)>,
+	weapon_query: Query<Entity, With<crate::behaviors::WeaponId>>,
+	weapon_ui_query: Query<Entity, With<crate::weapons::WeaponCooldownBar>>,
+	mut weapon_inventory: Option<ResMut<crate::weapons::WeaponInventory>>,
 ) {
 	for (entity, transform, damageable, is_enemy, enemy_data) in query.iter() {
 		if damageable.health <= 0.0 {
@@ -189,6 +192,18 @@ fn handle_damageable_death(
 							commands.entity(bar_entity).despawn();
 						}
 					}
+				}
+			} else {
+				// Player died - clean up all weapons and weapon UI
+				for weapon_entity in weapon_query.iter() {
+					commands.entity(weapon_entity).despawn();
+				}
+				for ui_entity in weapon_ui_query.iter() {
+					commands.entity(ui_entity).despawn();
+				}
+				// Clear weapon inventory
+				if let Some(inventory) = &mut weapon_inventory {
+					inventory.weapons.clear();
 				}
 			}
 

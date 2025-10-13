@@ -14,7 +14,7 @@ pub use behaviors::{
 pub use melee::{
 	detect_melee_targets, execute_melee_attack, update_melee_hitboxes, update_stunned_enemies,
 };
-pub use ui::{spawn_weapon_cooldown_bars, update_weapon_cooldown_bars};
+pub use ui::{spawn_weapon_cooldown_bars, update_weapon_cooldown_bars, WeaponCooldownBar};
 pub use upgrades::{apply_weapon_upgrades, sync_weapon_stats};
 
 pub struct WeaponsPlugin;
