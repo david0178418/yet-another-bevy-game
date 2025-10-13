@@ -4,16 +4,33 @@ use std::f32::consts::PI;
 #[derive(Resource, Default)]
 pub struct OrbitingEntityCount(pub usize);
 
+// Type aliases to reduce query complexity
+type FollowingEntityQuery<'w, 's> = Query<
+	'w,
+	's,
+	&'static mut Transform,
+	(
+		With<crate::behaviors::FollowPlayer>,
+		Without<crate::behaviors::OrbitingBehavior>,
+		Without<crate::behaviors::PlayerTag>,
+	),
+>;
+
+type ProjectileSpawnerQuery<'w, 's> = Query<
+	'w,
+	's,
+	(
+		&'static Transform,
+		&'static mut crate::behaviors::ProjectileSpawner,
+		Has<crate::behaviors::PlayerTag>,
+		Has<crate::behaviors::EnemyTag>,
+		Option<&'static crate::behaviors::WeaponSlot>,
+	),
+>;
+
 // System to update non-orbiting weapons that follow the player
 pub fn update_following_entities(
-	mut following_query: Query<
-		&mut Transform,
-		(
-			With<crate::behaviors::FollowPlayer>,
-			Without<crate::behaviors::OrbitingBehavior>,
-			Without<crate::behaviors::PlayerTag>,
-		),
-	>,
+	mut following_query: FollowingEntityQuery,
 	player_query: Query<
 		&Transform,
 		(
@@ -86,13 +103,7 @@ pub fn redistribute_orbiting_entities(
 // Generic update system for projectile spawners
 pub fn update_projectile_spawners(
 	mut commands: Commands,
-	mut spawner_query: Query<(
-		&Transform,
-		&mut crate::behaviors::ProjectileSpawner,
-		Has<crate::behaviors::PlayerTag>,
-		Has<crate::behaviors::EnemyTag>,
-		Option<&crate::behaviors::WeaponSlot>,
-	)>,
+	mut spawner_query: ProjectileSpawnerQuery,
 	player_query: Query<
 		&Transform,
 		(
