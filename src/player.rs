@@ -19,6 +19,13 @@ type ChargingPlayerQuery<'w, 's> = Query<
 	(With<Player>, With<crate::behaviors::EnergyCharging>),
 >;
 
+type RepulsionPlayerQuery<'w, 's> = Query<
+	'w,
+	's,
+	(&'static Transform, &'static crate::behaviors::PlayerEnergy),
+	(With<Player>, With<crate::behaviors::EnergyCharging>),
+>;
+
 impl Plugin for PlayerPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
@@ -42,6 +49,10 @@ impl Plugin for PlayerPlugin {
 				charge_energy,
 				update_energy_bar,
 			),
+		)
+		.add_systems(
+			Update,
+			apply_repulsion_field.after(crate::movement::MovementSystemSet),
 		);
 	}
 }
@@ -271,6 +282,7 @@ fn spawn_player(
 			current: crate::constants::PLAYER_DEFAULT_ENERGY,
 			max: crate::constants::PLAYER_DEFAULT_ENERGY,
 			regen_rate: crate::constants::PLAYER_ENERGY_REGEN_RATE,
+			repulsion_force: crate::constants::REPULSION_FORCE_DEFAULT,
 		},
 		crate::physics::Velocity { x: 0.0, y: 0.0 },
 		crate::physics::Grounded(false),
@@ -496,7 +508,7 @@ fn handle_energy_charging_input(
 		let mut charging_input = false;
 
 		// Check keyboard (E key)
-		if keyboard.pressed(KeyCode::KeyE) {
+		if keyboard.pressed(KeyCode::KeyF) {
 			charging_input = true;
 		}
 
@@ -527,6 +539,55 @@ fn charge_energy(mut player_query: ChargingPlayerQuery, time: Res<Time<Virtual>>
 		// Ensure velocity stays at 0 (belt and suspenders approach)
 		velocity.x = 0.0;
 		velocity.y = 0.0;
+	}
+}
+
+fn apply_repulsion_field(
+	player_query: RepulsionPlayerQuery,
+	mut enemy_query: Query<(&Transform, &mut crate::physics::Velocity, &crate::behaviors::Damageable), With<crate::behaviors::EnemyTag>>,
+	time: Res<Time<Virtual>>,
+) {
+	const MAX_RANGE: f32 = crate::constants::REPULSION_RANGE;
+	const BASE_FORCE: f32 = crate::constants::REPULSION_BASE_FORCE;
+
+	// Only apply if player is charging
+	if let Ok((player_transform, player_energy)) = player_query.single() {
+		// Skip if repulsion force is zero (no powerup acquired yet)
+		if player_energy.repulsion_force <= 0.0 {
+			return;
+		}
+
+		// Apply repulsion force to all enemies within range
+		// Force formula: (powerup_level * base * distance_falloff) / enemy_max_health
+		// This ensures: closer enemies feel more force, tankier enemies resist better
+		for (enemy_transform, mut enemy_velocity, enemy_damageable) in enemy_query.iter_mut() {
+			// Calculate distance to player
+			let direction_to_enemy = Vec2::new(
+				enemy_transform.translation.x - player_transform.translation.x,
+				enemy_transform.translation.y - player_transform.translation.y,
+			);
+			let distance = direction_to_enemy.length();
+
+			// Only apply force within range
+			if !(0.1..=MAX_RANGE).contains(&distance) {
+				continue;
+			}
+
+			// Normalize direction (away from player)
+			let direction = direction_to_enemy / distance;
+
+			// Distance-based falloff (closer = stronger)
+			let distance_factor = 1.0 - (distance / MAX_RANGE);
+
+			// Calculate force magnitude scaled by enemy max health
+			// Stronger enemies (more health) feel less force
+			let force_magnitude = (player_energy.repulsion_force * BASE_FORCE * distance_factor)
+				/ enemy_damageable.max_health;
+
+			// Apply force to enemy velocity
+			enemy_velocity.x += direction.x * force_magnitude * time.delta_secs();
+			enemy_velocity.y += direction.y * force_magnitude * time.delta_secs();
+		}
 	}
 }
 

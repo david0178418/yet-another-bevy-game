@@ -79,6 +79,7 @@ pub struct PlayerEnergy {
 	pub current: f32,
 	pub max: f32,
 	pub regen_rate: f32,
+	pub repulsion_force: f32,
 }
 
 #[derive(Component)]

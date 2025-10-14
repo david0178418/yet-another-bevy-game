@@ -46,6 +46,7 @@ pub enum StatType {
 	JumpForce,
 	MaxHealth,
 	EnergyRegen,
+	RepulsionForce,
 }
 
 #[derive(Deserialize, Clone)]

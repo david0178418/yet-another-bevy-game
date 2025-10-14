@@ -169,6 +169,9 @@ fn apply_powerup(
 			crate::StatType::EnergyRegen => {
 				player_energy.regen_rate += boost.value;
 			}
+			crate::StatType::RepulsionForce => {
+				player_energy.repulsion_force += boost.value;
+			}
 		},
 	}
 }

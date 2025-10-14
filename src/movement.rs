@@ -2,6 +2,9 @@ use bevy::prelude::*;
 
 pub struct MovementPlugin;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MovementSystemSet;
+
 type EnemyTransformQuery<'w, 's> = Query<
 	'w,
 	's,
@@ -20,7 +23,8 @@ impl Plugin for MovementPlugin {
 				update_seek_target_entities,
 				update_zigzag_entities,
 				update_maintain_distance_entities,
-			),
+			)
+				.in_set(MovementSystemSet),
 		);
 	}
 }

@@ -48,5 +48,23 @@
 			name: "Energy Regen III",
 			description: "Gain +5 energy/sec regeneration",
 		)),
+		StatBoost((
+			stat: RepulsionForce,
+			value: 10.0,
+			name: "Repulsion Field I",
+			description: "Push enemies away while charging energy",
+		)),
+		StatBoost((
+			stat: RepulsionForce,
+			value: 20.0,
+			name: "Repulsion Field II",
+			description: "Stronger energy charging repulsion",
+		)),
+		StatBoost((
+			stat: RepulsionForce,
+			value: 30.0,
+			name: "Repulsion Field III",
+			description: "Maximum energy charging repulsion",
+		)),
 	],
 )
