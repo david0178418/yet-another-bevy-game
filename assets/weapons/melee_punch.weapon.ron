@@ -16,6 +16,7 @@
 			attack_duration: 0.075,
 			hitbox_size: (40.0, 80.0),
 			hitbox_color: (0.9, 0.3, 0.3),
+			energy_cost: 25.0,
 		),
 	],
 	upgrade_behaviors: [

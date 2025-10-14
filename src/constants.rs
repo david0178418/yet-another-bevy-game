@@ -10,6 +10,8 @@ pub const GROUND_SNAP_DISTANCE: f32 = 10.0;
 pub const PLAYER_DEFAULT_SPEED: f32 = 300.0;
 pub const PLAYER_DEFAULT_JUMP_FORCE: f32 = 400.0;
 pub const PLAYER_DEFAULT_HEALTH: f32 = 100.0;
+pub const PLAYER_DEFAULT_ENERGY: f32 = 100.0;
+pub const PLAYER_ENERGY_REGEN_RATE: f32 = 10.0;
 pub const PLAYER_SIZE: Vec2 = Vec2::new(40.0, 40.0);
 pub const PLAYER_SPAWN_POSITION: Vec3 = Vec3::new(0.0, -200.0, 0.0);
 pub const PLAYER_COLOR: Color = Color::srgb(0.2, 0.4, 0.9);
@@ -64,6 +66,12 @@ pub const XP_BAR_HEIGHT: f32 = 20.0;
 pub const XP_BAR_TOP: f32 = 40.0;
 pub const XP_BAR_COLOR_BG: Color = Color::srgb(0.2, 0.2, 0.2);
 pub const XP_BAR_COLOR_FG: Color = Color::srgb(0.2, 0.6, 0.9);
+
+pub const ENERGY_BAR_WIDTH: f32 = 300.0;
+pub const ENERGY_BAR_HEIGHT: f32 = 20.0;
+pub const ENERGY_BAR_TOP: f32 = 70.0;
+pub const ENERGY_BAR_COLOR_BG: Color = Color::srgb(0.2, 0.2, 0.2);
+pub const ENERGY_BAR_COLOR_FG: Color = Color::srgb(0.9, 0.7, 0.2);
 
 pub const POWERUP_BUTTON_WIDTH: f32 = 400.0;
 pub const POWERUP_BUTTON_HEIGHT: f32 = 80.0;

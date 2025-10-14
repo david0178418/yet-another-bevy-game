@@ -112,6 +112,7 @@ pub fn update_projectile_spawners(
 		),
 	>,
 	enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
+	mut player_energy_query: Query<&mut crate::behaviors::PlayerEnergy, With<crate::behaviors::PlayerTag>>,
 	active_weapon: Res<crate::weapons::ActiveWeaponState>,
 	time: Res<Time<Virtual>>,
 ) {
@@ -212,6 +213,16 @@ pub fn update_projectile_spawners(
 		let Some(direction) = spawn_direction else {
 			continue;
 		};
+
+		// Check energy for player weapons
+		if is_player_weapon {
+			if let Ok(mut player_energy) = player_energy_query.single_mut() {
+				if player_energy.current < spawner.energy_cost {
+					continue; // Not enough energy, skip firing
+				}
+				player_energy.current -= spawner.energy_cost;
+			}
+		}
 
 		// Reset cooldown after firing
 		spawner.cooldown.reset();

@@ -256,6 +256,7 @@ pub fn spawn_entity_from_data(
 					projectile_color,
 					spawn_logic,
 					fire_range,
+					energy_cost,
 				} => {
 					let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
 					timer.tick(std::time::Duration::from_secs_f32(*cooldown)); // Start ready to fire
@@ -271,6 +272,7 @@ pub fn spawn_entity_from_data(
 							},
 							spawn_logic: spawn_logic.clone(),
 							fire_range: *fire_range,
+							energy_cost: *energy_cost,
 						},
 						DamageStats { base: *damage },
 						CooldownStats { base: *cooldown },
@@ -285,6 +287,7 @@ pub fn spawn_entity_from_data(
 					attack_duration,
 					hitbox_size,
 					hitbox_color,
+					energy_cost,
 				} => {
 					let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
 					timer.tick(std::time::Duration::from_secs_f32(*cooldown)); // Start ready to fire
@@ -298,6 +301,7 @@ pub fn spawn_entity_from_data(
 							attack_duration: *attack_duration,
 							hitbox_size: *hitbox_size,
 							hitbox_color: *hitbox_color,
+							energy_cost: *energy_cost,
 						},
 						DamageStats { base: *damage },
 						CooldownStats { base: *cooldown },

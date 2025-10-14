@@ -212,6 +212,7 @@ fn apply_enemy_behaviors(
 				projectile_color,
 				spawn_logic,
 				fire_range,
+				energy_cost: _,
 			} => {
 				let mut timer = Timer::from_seconds(*cooldown, TimerMode::Repeating);
 				timer.tick(std::time::Duration::from_secs_f32(*cooldown));
@@ -226,6 +227,7 @@ fn apply_enemy_behaviors(
 					},
 					spawn_logic: spawn_logic.clone(),
 					fire_range: *fire_range,
+					energy_cost: 0.0, // Enemies don't use energy
 				});
 			}
 			BehaviorData::ExplodeOnProximity {

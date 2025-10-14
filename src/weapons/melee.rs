@@ -9,6 +9,7 @@ pub fn detect_melee_targets(
 	player_query: Query<(Entity, &Transform), With<crate::behaviors::PlayerTag>>,
 	attack_query: Query<&crate::behaviors::MeleeAttackState, With<crate::behaviors::PlayerTag>>,
 	enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
+	mut player_energy_query: Query<&mut crate::behaviors::PlayerEnergy, With<crate::behaviors::PlayerTag>>,
 	active_weapon: Res<crate::weapons::ActiveWeaponState>,
 	time: Res<Time<Virtual>>,
 ) {
@@ -49,6 +50,14 @@ pub fn detect_melee_targets(
 			// Only attack if cooldown is ready AND there's an enemy in range
 			if let Some(enemy_transform) = nearest_enemy {
 				if melee.cooldown.is_finished() {
+					// Check if player has enough energy
+					if let Ok(mut player_energy) = player_energy_query.single_mut() {
+						if player_energy.current < melee.energy_cost {
+							continue; // Not enough energy, skip attack
+						}
+						player_energy.current -= melee.energy_cost;
+					}
+
 					melee.cooldown.reset();
 
 					// Calculate initial attack direction

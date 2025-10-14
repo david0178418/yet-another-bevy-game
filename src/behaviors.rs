@@ -74,6 +74,13 @@ pub struct Damageable {
 	pub max_health: f32,
 }
 
+#[derive(Component)]
+pub struct PlayerEnergy {
+	pub current: f32,
+	pub max: f32,
+	pub regen_rate: f32,
+}
+
 // ============ Target Tags ============
 
 #[derive(Component)]
@@ -111,6 +118,7 @@ pub struct ProjectileSpawner {
 	pub projectile_template: ProjectileTemplate,
 	pub spawn_logic: SpawnLogic,
 	pub fire_range: Option<f32>, // None = infinite range
+	pub energy_cost: f32,
 }
 
 #[derive(Clone)]
@@ -141,6 +149,7 @@ pub struct MeleeAttack {
 	pub attack_duration: f32,
 	pub hitbox_size: (f32, f32),
 	pub hitbox_color: (f32, f32, f32),
+	pub energy_cost: f32,
 }
 
 #[derive(Component)]
@@ -189,6 +198,7 @@ pub enum BehaviorData {
 		projectile_color: (f32, f32, f32),
 		spawn_logic: SpawnLogic,
 		fire_range: Option<f32>,
+		energy_cost: f32,
 	},
 	MeleeAttack {
 		cooldown: f32,
@@ -199,6 +209,7 @@ pub enum BehaviorData {
 		attack_duration: f32,
 		hitbox_size: (f32, f32),
 		hitbox_color: (f32, f32, f32),
+		energy_cost: f32,
 	},
 	FollowPlayer,
 	SeekTarget {

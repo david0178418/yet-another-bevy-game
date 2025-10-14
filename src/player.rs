@@ -27,6 +27,8 @@ impl Plugin for PlayerPlugin {
 				spawn_initial_weapon,
 				update_player_stats_display,
 				update_xp_bar,
+				regenerate_energy,
+				update_energy_bar,
 			),
 		);
 	}
@@ -65,6 +67,15 @@ struct XPBarForeground;
 
 #[derive(Component)]
 struct XPText;
+
+#[derive(Component)]
+struct EnergyBarBackground;
+
+#[derive(Component)]
+struct EnergyBarForeground;
+
+#[derive(Component)]
+struct EnergyText;
 
 fn spawn_platform(commands: &mut Commands, position: Vec3, size: Vec2) {
 	commands.spawn((
@@ -163,6 +174,51 @@ fn spawn_player_ui(commands: &mut Commands) {
 		ZIndex(2),
 		XPText,
 	));
+
+	commands.spawn((
+		Node {
+			position_type: PositionType::Absolute,
+			top: Val::Px(ENERGY_BAR_TOP),
+			left: Val::Px(UI_MARGIN),
+			width: Val::Px(ENERGY_BAR_WIDTH),
+			height: Val::Px(ENERGY_BAR_HEIGHT),
+			..default()
+		},
+		BackgroundColor(ENERGY_BAR_COLOR_BG),
+		ZIndex(0),
+		EnergyBarBackground,
+	));
+
+	commands.spawn((
+		Node {
+			position_type: PositionType::Absolute,
+			top: Val::Px(ENERGY_BAR_TOP),
+			left: Val::Px(UI_MARGIN),
+			width: Val::Px(ENERGY_BAR_WIDTH),
+			height: Val::Px(ENERGY_BAR_HEIGHT),
+			..default()
+		},
+		BackgroundColor(ENERGY_BAR_COLOR_FG),
+		ZIndex(1),
+		EnergyBarForeground,
+	));
+
+	commands.spawn((
+		Text::new("Energy: 100/100"),
+		Node {
+			position_type: PositionType::Absolute,
+			top: Val::Px(ENERGY_BAR_TOP + 2.0),
+			left: Val::Px(UI_MARGIN + 5.0),
+			..default()
+		},
+		TextColor(Color::WHITE),
+		TextFont {
+			font_size: UI_FONT_SIZE_SMALL,
+			..default()
+		},
+		ZIndex(2),
+		EnergyText,
+	));
 }
 
 fn spawn_player(
@@ -198,6 +254,11 @@ fn spawn_player(
 		crate::behaviors::Damageable {
 			health: crate::constants::PLAYER_DEFAULT_HEALTH,
 			max_health: crate::constants::PLAYER_DEFAULT_HEALTH,
+		},
+		crate::behaviors::PlayerEnergy {
+			current: crate::constants::PLAYER_DEFAULT_ENERGY,
+			max: crate::constants::PLAYER_DEFAULT_ENERGY,
+			regen_rate: crate::constants::PLAYER_ENERGY_REGEN_RATE,
 		},
 		crate::physics::Velocity { x: 0.0, y: 0.0 },
 		crate::physics::Grounded(false),
@@ -393,4 +454,39 @@ fn update_xp_bar(
 		"XP: {}/{}",
 		player_xp.current_xp, player_xp.xp_to_next_level
 	);
+}
+
+fn regenerate_energy(
+	mut player_query: Query<&mut crate::behaviors::PlayerEnergy, With<Player>>,
+	time: Res<Time<Virtual>>,
+) {
+	for mut energy in player_query.iter_mut() {
+		energy.current = (energy.current + energy.regen_rate * time.delta_secs()).min(energy.max);
+	}
+}
+
+fn update_energy_bar(
+	player_query: Query<&crate::behaviors::PlayerEnergy, (With<Player>, Changed<crate::behaviors::PlayerEnergy>)>,
+	mut energy_bar_query: Query<&mut Node, With<EnergyBarForeground>>,
+	mut energy_text_query: Query<&mut Text, With<EnergyText>>,
+) {
+	// Only update if UI exists
+	let Ok(mut node) = energy_bar_query.single_mut() else {
+		return;
+	};
+
+	let Ok(mut text) = energy_text_query.single_mut() else {
+		return;
+	};
+
+	// Only update if energy changed
+	if let Ok(energy) = player_query.single() {
+		// Update energy bar width
+		let energy_percent = (energy.current / energy.max).clamp(0.0, 1.0);
+		let new_width = crate::constants::ENERGY_BAR_WIDTH * energy_percent;
+		node.width = Val::Px(new_width);
+
+		// Update energy text
+		**text = format!("Energy: {:.0}/{:.0}", energy.current, energy.max);
+	}
 }
