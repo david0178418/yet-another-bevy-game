@@ -39,6 +39,19 @@ type ChargingInputPlayerQuery<'w, 's> = Query<
 	With<Player>,
 >;
 
+type RepulsionEnemyQuery<'w, 's> = Query<
+	'w,
+	's,
+	(
+		Entity,
+		&'static Transform,
+		&'static mut crate::physics::Velocity,
+		&'static crate::behaviors::Damageable,
+		Has<crate::behaviors::FlyingMovement>,
+	),
+	With<crate::behaviors::EnemyTag>,
+>;
+
 impl Plugin for PlayerPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
@@ -65,7 +78,9 @@ impl Plugin for PlayerPlugin {
 		)
 		.add_systems(
 			Update,
-			apply_repulsion_field.after(crate::movement::MovementSystemSet),
+			(apply_repulsion_field, cleanup_repulsion_markers)
+				.chain()
+				.before(crate::movement::MovementSystemSet),
 		);
 	}
 }
@@ -599,12 +614,12 @@ fn charge_energy(mut player_query: ChargingPlayerQuery, time: Res<Time<Virtual>>
 }
 
 fn apply_repulsion_field(
+	mut commands: Commands,
 	player_query: RepulsionPlayerQuery,
-	mut enemy_query: Query<(&Transform, &mut crate::physics::Velocity, &crate::behaviors::Damageable), With<crate::behaviors::EnemyTag>>,
-	time: Res<Time<Virtual>>,
+	mut enemy_query: RepulsionEnemyQuery,
 ) {
 	const MAX_RANGE: f32 = crate::constants::REPULSION_RANGE;
-	const BASE_FORCE: f32 = crate::constants::REPULSION_BASE_FORCE;
+	const BASE_SPEED: f32 = crate::constants::REPULSION_BASE_SPEED;
 
 	// Only apply if player is charging
 	if let Ok((player_transform, player_energy)) = player_query.single() {
@@ -613,10 +628,12 @@ fn apply_repulsion_field(
 			return;
 		}
 
-		// Apply repulsion force to all enemies within range
-		// Force formula: (powerup_level * base * distance_falloff) / enemy_max_health
-		// This ensures: closer enemies feel more force, tankier enemies resist better
-		for (enemy_transform, mut enemy_velocity, enemy_damageable) in enemy_query.iter_mut() {
+		// Apply repulsion velocity to all enemies within range
+		// Speed formula: (powerup_level * base_speed * distance_falloff) / sqrt(enemy_max_health)
+		// This ensures: closer enemies pushed harder, tankier enemies resist better
+		for (enemy_entity, enemy_transform, mut enemy_velocity, enemy_damageable, is_flying) in
+			enemy_query.iter_mut()
+		{
 			// Calculate distance to player
 			let direction_to_enemy = Vec2::new(
 				enemy_transform.translation.x - player_transform.translation.x,
@@ -624,26 +641,51 @@ fn apply_repulsion_field(
 			);
 			let distance = direction_to_enemy.length();
 
-			// Only apply force within range
+			// Only apply repulsion within range
 			if !(0.1..=MAX_RANGE).contains(&distance) {
 				continue;
 			}
 
+			// Mark enemy as in repulsion field (stops movement behaviors)
+			commands.entity(enemy_entity).insert(crate::behaviors::InRepulsionField);
+
 			// Normalize direction (away from player)
 			let direction = direction_to_enemy / distance;
 
-			// Distance-based falloff (closer = stronger)
+			// Distance-based falloff (closer = stronger push)
 			let distance_factor = 1.0 - (distance / MAX_RANGE);
 
-			// Calculate force magnitude scaled by enemy max health
-			// Stronger enemies (more health) feel less force
-			let force_magnitude = (player_energy.repulsion_force * BASE_FORCE * distance_factor)
-				/ enemy_damageable.max_health;
+			// Calculate repulsion speed scaled by enemy max health (sqrt for gentler scaling)
+			// Tankier enemies resist better but still get pushed
+			let repulsion_speed =
+				(player_energy.repulsion_force * BASE_SPEED * distance_factor) / enemy_damageable.max_health.sqrt();
 
-			// Apply force to enemy velocity
-			enemy_velocity.x += direction.x * force_magnitude * time.delta_secs();
-			enemy_velocity.y += direction.y * force_magnitude * time.delta_secs();
+			// Set velocity directly (replaces movement behavior velocity)
+			enemy_velocity.x = direction.x * repulsion_speed;
+
+			// Only set Y velocity for flying entities; grounded entities use gravity
+			if is_flying {
+				enemy_velocity.y = direction.y * repulsion_speed;
+			}
 		}
+	}
+}
+
+fn cleanup_repulsion_markers(
+	mut commands: Commands,
+	player_query: Query<(), (With<Player>, Without<crate::behaviors::EnergyCharging>)>,
+	marked_enemies: Query<Entity, With<crate::behaviors::InRepulsionField>>,
+) {
+	// Only cleanup if player is NOT charging
+	if player_query.is_empty() {
+		return; // Player doesn't exist or is charging
+	}
+
+	// Remove InRepulsionField marker from all marked enemies
+	for enemy_entity in marked_enemies.iter() {
+		commands
+			.entity(enemy_entity)
+			.remove::<crate::behaviors::InRepulsionField>();
 	}
 }
 

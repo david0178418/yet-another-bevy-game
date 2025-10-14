@@ -90,6 +90,9 @@ pub struct PlayerEnergy {
 #[derive(Component)]
 pub struct EnergyCharging;
 
+#[derive(Component)]
+pub struct InRepulsionField;
+
 // ============ Target Tags ============
 
 #[derive(Component)]

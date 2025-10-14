@@ -15,6 +15,45 @@ type EnemyTransformQuery<'w, 's> = Query<
 	),
 >;
 
+type SeekQuery<'w, 's> = Query<
+	'w,
+	's,
+	(
+		&'static Transform,
+		&'static mut crate::physics::Velocity,
+		&'static crate::behaviors::SeekTarget,
+		Has<crate::behaviors::Stunned>,
+		Has<crate::behaviors::FlyingMovement>,
+	),
+	Without<crate::behaviors::InRepulsionField>,
+>;
+
+type ZigZagQuery<'w, 's> = Query<
+	'w,
+	's,
+	(
+		&'static Transform,
+		&'static mut crate::physics::Velocity,
+		&'static mut crate::behaviors::ZigZagMovement,
+		Has<crate::behaviors::Stunned>,
+		Has<crate::behaviors::FlyingMovement>,
+	),
+	Without<crate::behaviors::InRepulsionField>,
+>;
+
+type MaintainDistanceQuery<'w, 's> = Query<
+	'w,
+	's,
+	(
+		&'static Transform,
+		&'static mut crate::physics::Velocity,
+		&'static crate::behaviors::MaintainDistance,
+		Has<crate::behaviors::Stunned>,
+		Has<crate::behaviors::FlyingMovement>,
+	),
+	Without<crate::behaviors::InRepulsionField>,
+>;
+
 impl Plugin for MovementPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
@@ -30,13 +69,7 @@ impl Plugin for MovementPlugin {
 }
 
 fn update_seek_target_entities(
-	mut seek_query: Query<(
-		&Transform,
-		&mut crate::physics::Velocity,
-		&crate::behaviors::SeekTarget,
-		Has<crate::behaviors::Stunned>,
-		Has<crate::behaviors::FlyingMovement>,
-	)>,
+	mut seek_query: SeekQuery,
 	player_query: Query<&Transform, With<crate::behaviors::PlayerTag>>,
 	enemy_query: Query<(Entity, &Transform), With<crate::behaviors::EnemyTag>>,
 ) {
@@ -77,13 +110,7 @@ fn update_seek_target_entities(
 }
 
 fn update_zigzag_entities(
-	mut zigzag_query: Query<(
-		&Transform,
-		&mut crate::physics::Velocity,
-		&mut crate::behaviors::ZigZagMovement,
-		Has<crate::behaviors::Stunned>,
-		Has<crate::behaviors::FlyingMovement>,
-	)>,
+	mut zigzag_query: ZigZagQuery,
 	player_query: Query<
 		&Transform,
 		(
@@ -126,13 +153,7 @@ fn update_zigzag_entities(
 }
 
 fn update_maintain_distance_entities(
-	mut maintain_query: Query<(
-		&Transform,
-		&mut crate::physics::Velocity,
-		&crate::behaviors::MaintainDistance,
-		Has<crate::behaviors::Stunned>,
-		Has<crate::behaviors::FlyingMovement>,
-	)>,
+	mut maintain_query: MaintainDistanceQuery,
 	player_query: Query<
 		&Transform,
 		(
