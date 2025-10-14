@@ -155,10 +155,10 @@ fn update_weapon_activation(
 	use crate::behaviors::WeaponSlot;
 
 	// Check for button press events (not holds)
-	let melee_just_pressed =
-		keyboard.just_pressed(KeyCode::KeyQ) || gamepads.iter().any(|g| g.just_pressed(GamepadButton::West));
-	let ranged_just_pressed =
-		keyboard.just_pressed(KeyCode::KeyE) || gamepads.iter().any(|g| g.just_pressed(GamepadButton::East));
+	let melee_just_pressed = keyboard.just_pressed(KeyCode::KeyQ)
+		|| gamepads.iter().any(|g| g.just_pressed(GamepadButton::West));
+	let ranged_just_pressed = keyboard.just_pressed(KeyCode::KeyE)
+		|| gamepads.iter().any(|g| g.just_pressed(GamepadButton::East));
 
 	// Toggle melee weapon (takes priority if both pressed)
 	if melee_just_pressed {
