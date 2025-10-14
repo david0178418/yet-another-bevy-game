@@ -30,5 +30,23 @@
 			name: "Max Health +20",
 			description: "Increases maximum health and heals",
 		)),
+		StatBoost((
+			stat: EnergyRegen,
+			value: 2.0,
+			name: "Energy Regen I",
+			description: "Gain +2 energy/sec regeneration",
+		)),
+		StatBoost((
+			stat: EnergyRegen,
+			value: 3.0,
+			name: "Energy Regen II",
+			description: "Gain +3 energy/sec regeneration",
+		)),
+		StatBoost((
+			stat: EnergyRegen,
+			value: 5.0,
+			name: "Energy Regen III",
+			description: "Gain +5 energy/sec regeneration",
+		)),
 	],
 )

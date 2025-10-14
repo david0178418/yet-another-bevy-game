@@ -111,12 +111,16 @@ struct PowerupButton {
 fn apply_powerup(
 	powerup_def: &crate::PowerupDefinition,
 	commands: &mut Commands,
-	player: &mut crate::player::Player,
-	player_damageable: &mut crate::behaviors::Damageable,
+	player_stats: (
+		&mut crate::player::Player,
+		&mut crate::behaviors::Damageable,
+		&mut crate::behaviors::PlayerEnergy,
+	),
 	weapon_resources: &WeaponResources,
 	weapon_inventory: &mut crate::weapons::WeaponInventory,
 	weapon_level_query: &mut Query<&mut crate::behaviors::WeaponLevel>,
 ) {
+	let (player, player_damageable, player_energy) = player_stats;
 	match powerup_def {
 		crate::PowerupDefinition::Weapon(weapon_id) => {
 			// Check if player already owns this weapon
@@ -161,6 +165,9 @@ fn apply_powerup(
 			crate::StatType::MaxHealth => {
 				player_damageable.max_health += boost.value;
 				player_damageable.health = player_damageable.max_health;
+			}
+			crate::StatType::EnergyRegen => {
+				player_energy.regen_rate += boost.value;
 			}
 		},
 	}
@@ -352,6 +359,7 @@ fn handle_powerup_selection(
 		(
 			&mut crate::player::Player,
 			&mut crate::behaviors::Damageable,
+			&mut crate::behaviors::PlayerEnergy,
 		),
 		With<crate::behaviors::PlayerTag>,
 	>,
@@ -364,12 +372,11 @@ fn handle_powerup_selection(
 	for (button, interaction, mut bg_color) in interaction_query.iter_mut() {
 		match *interaction {
 			Interaction::Pressed => {
-				if let Ok((mut player, mut damageable)) = player_query.single_mut() {
+				if let Ok((mut player, mut damageable, mut player_energy)) = player_query.single_mut() {
 					apply_powerup(
 						&button.powerup_def,
 						&mut commands,
-						&mut player,
-						&mut damageable,
+						(&mut player, &mut damageable, &mut player_energy),
 						&weapon_resources,
 						&mut weapon_inventory,
 						&mut weapon_level_query,
@@ -415,12 +422,11 @@ fn handle_powerup_selection(
 	if should_confirm {
 		for button in button_query.iter() {
 			if button.index == ui_state.state.selected_index {
-				if let Ok((mut player, mut damageable)) = player_query.single_mut() {
+				if let Ok((mut player, mut damageable, mut player_energy)) = player_query.single_mut() {
 					apply_powerup(
 						&button.powerup_def,
 						&mut commands,
-						&mut player,
-						&mut damageable,
+						(&mut player, &mut damageable, &mut player_energy),
 						&weapon_resources,
 						&mut weapon_inventory,
 						&mut weapon_level_query,
