@@ -1,5 +1,5 @@
 (
-	weapon_ids: ["", "auto_shooter", "melee_punch"],
+	weapon_ids: ["auto_shooter", "melee_punch"],
 	enemy_ids: ["weak", "medium", "strong", "straight_flyer", "zigzag_flyer", "ranged_flyer", "ranged_ground", "exploder"],
 	initial_weapons: [
 		(
