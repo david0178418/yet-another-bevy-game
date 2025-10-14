@@ -4,6 +4,7 @@
 	size: (32.0, 32.0),
 	xp_value: 15,
 	behaviors: [
+		FlyingMovement,
 		MaintainDistance(
 			target_type: Player,
 			preferred_distance: 250.0,

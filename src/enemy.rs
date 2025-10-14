@@ -241,6 +241,9 @@ fn apply_enemy_behaviors(
 					targets: *targets,
 				});
 			}
+			BehaviorData::FlyingMovement => {
+				entity_commands.insert(FlyingMovement);
+			}
 			_ => {
 				// Other behaviors (Orbiting, MeleeAttack, FollowPlayer) are not used by enemies
 			}

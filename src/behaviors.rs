@@ -46,6 +46,11 @@ pub struct MaintainDistance {
 	pub speed: f32,
 }
 
+/// Marker component indicating an entity can move freely in the Y axis (flying).
+/// Entities without this component will have their Y velocity controlled by gravity.
+#[derive(Component)]
+pub struct FlyingMovement;
+
 // ============ Damage Behaviors ============
 
 #[derive(Component)]
@@ -235,6 +240,7 @@ pub enum BehaviorData {
 		damage: f32,
 		targets: TargetFilter,
 	},
+	FlyingMovement,
 }
 
 // ============ Utility Component ============

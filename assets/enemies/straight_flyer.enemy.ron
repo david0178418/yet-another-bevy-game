@@ -4,6 +4,7 @@
 	size: (25.0, 25.0),
 	xp_value: 8,
 	behaviors: [
+		FlyingMovement,
 		SeekTarget(
 			target_type: Player,
 			speed: 120.0,

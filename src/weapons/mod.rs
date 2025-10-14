@@ -345,6 +345,9 @@ pub fn spawn_entity_from_data(
 				BehaviorData::ExplodeOnProximity { .. } => {
 					// ExplodeOnProximity is not used by weapons
 				}
+				BehaviorData::FlyingMovement => {
+					// FlyingMovement is not used by weapons
+				}
 			}
 		}
 

@@ -35,13 +35,14 @@ fn update_seek_target_entities(
 		&mut crate::physics::Velocity,
 		&crate::behaviors::SeekTarget,
 		Has<crate::behaviors::Stunned>,
+		Has<crate::behaviors::FlyingMovement>,
 	)>,
 	player_query: Query<&Transform, With<crate::behaviors::PlayerTag>>,
 	enemy_query: Query<(Entity, &Transform), With<crate::behaviors::EnemyTag>>,
 ) {
 	use crate::behaviors::TargetType;
 
-	for (transform, mut velocity, seek, is_stunned) in seek_query.iter_mut() {
+	for (transform, mut velocity, seek, is_stunned, is_flying) in seek_query.iter_mut() {
 		if is_stunned {
 			continue;
 		}
@@ -64,8 +65,13 @@ fn update_seek_target_entities(
 				target_pos.y - transform.translation.y,
 			)
 			.normalize_or_zero();
+
 			velocity.x = direction.x * seek.speed;
-			velocity.y = direction.y * seek.speed;
+
+			// Only set Y velocity for flying entities; grounded entities use gravity
+			if is_flying {
+				velocity.y = direction.y * seek.speed;
+			}
 		}
 	}
 }
@@ -76,6 +82,7 @@ fn update_zigzag_entities(
 		&mut crate::physics::Velocity,
 		&mut crate::behaviors::ZigZagMovement,
 		Has<crate::behaviors::Stunned>,
+		Has<crate::behaviors::FlyingMovement>,
 	)>,
 	player_query: Query<
 		&Transform,
@@ -87,7 +94,7 @@ fn update_zigzag_entities(
 	time: Res<Time<Virtual>>,
 ) {
 	if let Ok(player_transform) = player_query.single() {
-		for (transform, mut velocity, mut zigzag, is_stunned) in zigzag_query.iter_mut() {
+		for (transform, mut velocity, mut zigzag, is_stunned, is_flying) in zigzag_query.iter_mut() {
 			if is_stunned {
 				continue;
 			}
@@ -109,7 +116,11 @@ fn update_zigzag_entities(
 				(direction_to_player + perpendicular * oscillation).normalize_or_zero();
 
 			velocity.x = final_direction.x * zigzag.base_speed;
-			velocity.y = final_direction.y * zigzag.base_speed;
+
+			// Only set Y velocity for flying entities; grounded entities use gravity
+			if is_flying {
+				velocity.y = final_direction.y * zigzag.base_speed;
+			}
 		}
 	}
 }
@@ -120,6 +131,7 @@ fn update_maintain_distance_entities(
 		&mut crate::physics::Velocity,
 		&crate::behaviors::MaintainDistance,
 		Has<crate::behaviors::Stunned>,
+		Has<crate::behaviors::FlyingMovement>,
 	)>,
 	player_query: Query<
 		&Transform,
@@ -132,7 +144,7 @@ fn update_maintain_distance_entities(
 ) {
 	use crate::behaviors::TargetType;
 
-	for (transform, mut velocity, maintain, is_stunned) in maintain_query.iter_mut() {
+	for (transform, mut velocity, maintain, is_stunned, is_flying) in maintain_query.iter_mut() {
 		if is_stunned {
 			continue;
 		}
@@ -161,13 +173,22 @@ fn update_maintain_distance_entities(
 
 			if distance > maintain.preferred_distance + DISTANCE_THRESHOLD {
 				velocity.x = normalized_direction.x * maintain.speed;
-				velocity.y = normalized_direction.y * maintain.speed;
+				// Only set Y velocity for flying entities; grounded entities use gravity
+				if is_flying {
+					velocity.y = normalized_direction.y * maintain.speed;
+				}
 			} else if distance < maintain.preferred_distance - DISTANCE_THRESHOLD {
 				velocity.x = -normalized_direction.x * maintain.speed;
-				velocity.y = -normalized_direction.y * maintain.speed;
+				// Only set Y velocity for flying entities; grounded entities use gravity
+				if is_flying {
+					velocity.y = -normalized_direction.y * maintain.speed;
+				}
 			} else {
 				velocity.x = 0.0;
-				velocity.y = 0.0;
+				// Only set Y velocity for flying entities; grounded entities use gravity
+				if is_flying {
+					velocity.y = 0.0;
+				}
 			}
 		}
 	}
