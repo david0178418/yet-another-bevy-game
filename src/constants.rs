@@ -55,7 +55,7 @@ pub const XP_ORB_COLOR: Color = Color::srgb(0.9, 0.7, 0.2);
 // ============ Powerup Constants ============
 
 pub const POWERUP_OPTIONS_COUNT: usize = 3;
-pub const POWERUP_OVERLAY_ALPHA: f32 = 0.8;
+pub const POWERUP_OVERLAY_ALPHA: f32 = 0.1;
 
 // ============ UI Constants ============
 

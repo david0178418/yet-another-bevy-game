@@ -26,6 +26,19 @@ type RepulsionPlayerQuery<'w, 's> = Query<
 	(With<Player>, With<crate::behaviors::EnergyCharging>),
 >;
 
+type ChargingInputPlayerQuery<'w, 's> = Query<
+	'w,
+	's,
+	(
+		Entity,
+		&'static Transform,
+		&'static mut crate::physics::Velocity,
+		Has<crate::behaviors::EnergyCharging>,
+		&'static crate::behaviors::PlayerEnergy,
+	),
+	With<Player>,
+>;
+
 impl Plugin for PlayerPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
@@ -99,6 +112,9 @@ struct EnergyBarForeground;
 
 #[derive(Component)]
 struct EnergyText;
+
+#[derive(Component)]
+struct RepulsionFieldIndicator;
 
 fn spawn_platform(commands: &mut Commands, position: Vec3, size: Vec2) {
 	commands.spawn((
@@ -496,18 +512,20 @@ fn handle_energy_charging_input(
 	mut commands: Commands,
 	keyboard: Res<ButtonInput<KeyCode>>,
 	gamepads: Query<&Gamepad>,
-	mut player_query: Query<(Entity, &mut crate::physics::Velocity, Has<crate::behaviors::EnergyCharging>), With<Player>>,
+	mut player_query: ChargingInputPlayerQuery,
+	indicator_query: Query<Entity, With<RepulsionFieldIndicator>>,
 	powerup_state: Res<crate::powerups::PowerupState>,
+	(mut meshes, mut materials): (ResMut<Assets<Mesh>>, ResMut<Assets<ColorMaterial>>),
 ) {
 	// Don't process input while menu is showing
 	if powerup_state.showing {
 		return;
 	}
 
-	for (player_entity, mut velocity, is_charging) in player_query.iter_mut() {
+	for (player_entity, player_transform, mut velocity, is_charging, player_energy) in player_query.iter_mut() {
 		let mut charging_input = false;
 
-		// Check keyboard (E key)
+		// Check keyboard (F key)
 		if keyboard.pressed(KeyCode::KeyF) {
 			charging_input = true;
 		}
@@ -524,9 +542,47 @@ fn handle_energy_charging_input(
 			commands.entity(player_entity).insert(crate::behaviors::EnergyCharging);
 			velocity.x = 0.0;
 			velocity.y = 0.0;
+
+			// Spawn repulsion field indicators (only if player has repulsion force)
+			if player_energy.repulsion_force > 0.0 {
+				const REPULSION_RANGE: f32 = crate::constants::REPULSION_RANGE;
+				const NUM_RINGS: usize = 8;
+
+				// Spawn multiple concentric circles with gradient transparency
+				for i in 0..NUM_RINGS {
+					let ring_index = i as f32;
+					let ring_fraction = (ring_index + 1.0) / NUM_RINGS as f32;
+
+					// Outer rings are more transparent (reduced overall alpha)
+					let alpha = 0.05 * (1.0 - ring_fraction * 0.8);
+
+					// Each ring is progressively larger
+					let radius = REPULSION_RANGE * ring_fraction;
+
+					// Create a circle mesh
+					let circle_mesh = Circle::new(radius);
+					let mesh_handle = meshes.add(circle_mesh);
+
+					// Create a semi-transparent blue material
+					let color = Color::srgba(0.3, 0.6, 1.0, alpha);
+					let material_handle = materials.add(ColorMaterial::from(color));
+
+					commands.spawn((
+						Mesh2d(mesh_handle),
+						MeshMaterial2d(material_handle),
+						Transform::from_translation(player_transform.translation.with_z(-1.0)),
+						RepulsionFieldIndicator,
+					));
+				}
+			}
 		} else if !charging_input && is_charging {
 			// Stop charging
 			commands.entity(player_entity).remove::<crate::behaviors::EnergyCharging>();
+
+			// Despawn all repulsion field indicators
+			for indicator_entity in indicator_query.iter() {
+				commands.entity(indicator_entity).despawn();
+			}
 		}
 	}
 }
