@@ -1,5 +1,12 @@
 use bevy::prelude::*;
 
+type PlayerEnergyQuery<'w, 's> = Query<
+	'w,
+	's,
+	&'static mut crate::behaviors::PlayerEnergy,
+	With<crate::behaviors::PlayerTag>,
+>;
+
 pub fn detect_melee_targets(
 	mut commands: Commands,
 	mut melee_query: Query<
@@ -9,9 +16,8 @@ pub fn detect_melee_targets(
 	player_query: Query<(Entity, &Transform), With<crate::behaviors::PlayerTag>>,
 	attack_query: Query<&crate::behaviors::MeleeAttackState, With<crate::behaviors::PlayerTag>>,
 	enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
-	mut player_energy_query: Query<&mut crate::behaviors::PlayerEnergy, With<crate::behaviors::PlayerTag>>,
-	active_weapon: Res<crate::weapons::ActiveWeaponState>,
-	time: Res<Time<Virtual>>,
+	mut player_energy_query: PlayerEnergyQuery,
+	(active_weapon, time): (Res<crate::weapons::ActiveWeaponState>, Res<Time<Virtual>>),
 ) {
 	use crate::behaviors::*;
 
