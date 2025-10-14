@@ -81,6 +81,9 @@ pub struct PlayerEnergy {
 	pub regen_rate: f32,
 }
 
+#[derive(Component)]
+pub struct EnergyCharging;
+
 // ============ Target Tags ============
 
 #[derive(Component)]

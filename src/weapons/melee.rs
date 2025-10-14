@@ -7,13 +7,23 @@ type PlayerEnergyQuery<'w, 's> = Query<
 	With<crate::behaviors::PlayerTag>,
 >;
 
+type NonChargingPlayerQuery<'w, 's> = Query<
+	'w,
+	's,
+	(Entity, &'static Transform),
+	(
+		With<crate::behaviors::PlayerTag>,
+		Without<crate::behaviors::EnergyCharging>,
+	),
+>;
+
 pub fn detect_melee_targets(
 	mut commands: Commands,
 	mut melee_query: Query<
 		&mut crate::behaviors::MeleeAttack,
 		With<crate::behaviors::FollowPlayer>,
 	>,
-	player_query: Query<(Entity, &Transform), With<crate::behaviors::PlayerTag>>,
+	player_query: NonChargingPlayerQuery,
 	attack_query: Query<&crate::behaviors::MeleeAttackState, With<crate::behaviors::PlayerTag>>,
 	enemy_query: Query<&Transform, With<crate::behaviors::EnemyTag>>,
 	mut player_energy_query: PlayerEnergyQuery,

@@ -59,7 +59,10 @@ type GroundedQuery<'w, 's> = Query<
 type CollisionQuery<'w, 's> =
 	Query<'w, 's, (&'static mut Transform, &'static Sprite), (With<Collider>, Without<Ground>)>;
 
-fn apply_gravity(mut query: Query<(&mut Velocity, &Grounded)>, time: Res<Time<Virtual>>) {
+fn apply_gravity(
+	mut query: Query<(&mut Velocity, &Grounded), Without<crate::behaviors::EnergyCharging>>,
+	time: Res<Time<Virtual>>,
+) {
 	for (mut velocity, grounded) in query.iter_mut() {
 		if !grounded.0 {
 			velocity.y += crate::constants::GRAVITY * time.delta_secs();

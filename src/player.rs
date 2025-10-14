@@ -9,6 +9,16 @@ type PlayerStatsQuery<'w, 's> = Query<
 	Or<(Changed<Player>, Changed<crate::behaviors::Damageable>)>,
 >;
 
+type ChargingPlayerQuery<'w, 's> = Query<
+	'w,
+	's,
+	(
+		&'static mut crate::behaviors::PlayerEnergy,
+		&'static mut crate::physics::Velocity,
+	),
+	(With<Player>, With<crate::behaviors::EnergyCharging>),
+>;
+
 impl Plugin for PlayerPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
@@ -17,6 +27,7 @@ impl Plugin for PlayerPlugin {
 				// Process input before physics for minimal latency
 				player_movement,
 				player_jump,
+				handle_energy_charging_input,
 			)
 				.before(crate::physics::PhysicsSet),
 		)
@@ -28,6 +39,7 @@ impl Plugin for PlayerPlugin {
 				update_player_stats_display,
 				update_xp_bar,
 				regenerate_energy,
+				charge_energy,
 				update_energy_bar,
 			),
 		);
@@ -323,7 +335,7 @@ fn spawn_initial_weapon(
 fn player_movement(
 	keyboard: Res<ButtonInput<KeyCode>>,
 	gamepads: Query<&Gamepad>,
-	mut query: Query<(&mut crate::physics::Velocity, &Player)>,
+	mut query: Query<(&mut crate::physics::Velocity, &Player), Without<crate::behaviors::EnergyCharging>>,
 	time: Res<Time>, // Use real time for input, not virtual (paused) time
 ) {
 	for (mut velocity, player) in query.iter_mut() {
@@ -382,11 +394,14 @@ fn player_movement(
 fn player_jump(
 	keyboard: Res<ButtonInput<KeyCode>>,
 	gamepads: Query<&Gamepad>,
-	mut query: Query<(
-		&mut crate::physics::Velocity,
-		&Player,
-		&crate::physics::Grounded,
-	)>,
+	mut query: Query<
+		(
+			&mut crate::physics::Velocity,
+			&Player,
+			&crate::physics::Grounded,
+		),
+		Without<crate::behaviors::EnergyCharging>,
+	>,
 	powerup_state: Res<crate::powerups::PowerupState>,
 ) {
 	// Don't process jump input while menu is showing
@@ -462,6 +477,56 @@ fn regenerate_energy(
 ) {
 	for mut energy in player_query.iter_mut() {
 		energy.current = (energy.current + energy.regen_rate * time.delta_secs()).min(energy.max);
+	}
+}
+
+fn handle_energy_charging_input(
+	mut commands: Commands,
+	keyboard: Res<ButtonInput<KeyCode>>,
+	gamepads: Query<&Gamepad>,
+	mut player_query: Query<(Entity, &mut crate::physics::Velocity, Has<crate::behaviors::EnergyCharging>), With<Player>>,
+	powerup_state: Res<crate::powerups::PowerupState>,
+) {
+	// Don't process input while menu is showing
+	if powerup_state.showing {
+		return;
+	}
+
+	for (player_entity, mut velocity, is_charging) in player_query.iter_mut() {
+		let mut charging_input = false;
+
+		// Check keyboard (E key)
+		if keyboard.pressed(KeyCode::KeyE) {
+			charging_input = true;
+		}
+
+		// Check gamepad (Y button / North)
+		for gamepad in gamepads.iter() {
+			if gamepad.pressed(GamepadButton::North) {
+				charging_input = true;
+			}
+		}
+
+		if charging_input && !is_charging {
+			// Start charging
+			commands.entity(player_entity).insert(crate::behaviors::EnergyCharging);
+			velocity.x = 0.0;
+			velocity.y = 0.0;
+		} else if !charging_input && is_charging {
+			// Stop charging
+			commands.entity(player_entity).remove::<crate::behaviors::EnergyCharging>();
+		}
+	}
+}
+
+fn charge_energy(mut player_query: ChargingPlayerQuery, time: Res<Time<Virtual>>) {
+	for (mut energy, mut velocity) in player_query.iter_mut() {
+		// Accumulate energy at fast rate
+		energy.current = (energy.current + crate::constants::ENERGY_CHARGE_RATE * time.delta_secs()).min(energy.max);
+
+		// Ensure velocity stays at 0 (belt and suspenders approach)
+		velocity.x = 0.0;
+		velocity.y = 0.0;
 	}
 }
 
