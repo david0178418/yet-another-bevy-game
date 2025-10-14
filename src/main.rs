@@ -16,6 +16,7 @@ mod movement;
 mod physics;
 mod player;
 mod powerups;
+mod validation;
 mod weapons;
 
 use combat::CombatPlugin;
@@ -25,6 +26,7 @@ use movement::MovementPlugin;
 use physics::PhysicsPlugin;
 use player::PlayerPlugin;
 use powerups::PowerupsPlugin;
+use validation::ValidationPlugin;
 use weapons::WeaponsPlugin;
 
 const GAME_WIDTH: f32 = 1280.0;
@@ -125,6 +127,7 @@ fn main() {
 			PowerupsPlugin,
 			CombatPlugin,
 			MovementPlugin,
+			ValidationPlugin,
 		))
 		.insert_resource(ClearColor(Color::BLACK))
 		.add_systems(Startup, (setup_camera, load_game_config))
