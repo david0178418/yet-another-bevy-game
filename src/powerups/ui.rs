@@ -1,30 +1,31 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 use rand::seq::SliceRandom;
 
-pub struct PowerupsPlugin;
+#[derive(Component)]
+pub struct PowerupUIContainer;
 
-#[derive(SystemParam)]
-struct WeaponResources<'w> {
-	registry: Option<Res<'w, crate::weapons::WeaponRegistry>>,
-	assets: Res<'w, Assets<crate::weapons::WeaponData>>,
+#[derive(Component)]
+pub struct PowerupButton {
+	pub powerup_def: crate::PowerupDefinition,
+	pub index: usize,
 }
 
 #[derive(SystemParam)]
-struct PowerupUIState<'w, 's> {
-	state: ResMut<'w, PowerupState>,
-	ui_query: Query<'w, 's, Entity, With<PowerupUIContainer>>,
-	time: ResMut<'w, Time<Virtual>>,
+pub struct PowerupUIState<'w, 's> {
+	pub state: ResMut<'w, super::PowerupState>,
+	pub ui_query: Query<'w, 's, Entity, With<PowerupUIContainer>>,
+	pub time: ResMut<'w, Time<Virtual>>,
 }
 
 #[derive(SystemParam)]
-struct InputState<'w, 's> {
-	gamepads: Query<'w, 's, &'static Gamepad>,
-	keyboard: Res<'w, ButtonInput<KeyCode>>,
+pub struct InputState<'w, 's> {
+	pub gamepads: Query<'w, 's, &'static Gamepad>,
+	pub keyboard: Res<'w, ButtonInput<KeyCode>>,
 }
 
 fn get_powerup_name(
 	powerup: &crate::PowerupDefinition,
-	weapon_resources: &WeaponResources,
+	weapon_resources: &super::WeaponResources,
 	weapon_inventory: &crate::weapons::WeaponInventory,
 ) -> String {
 	match powerup {
@@ -50,7 +51,7 @@ fn get_powerup_name(
 
 fn get_powerup_description(
 	powerup: &crate::PowerupDefinition,
-	weapon_resources: &WeaponResources,
+	weapon_resources: &super::WeaponResources,
 	weapon_inventory: &crate::weapons::WeaponInventory,
 ) -> String {
 	match powerup {
@@ -77,106 +78,7 @@ fn get_powerup_description(
 	}
 }
 
-impl Plugin for PowerupsPlugin {
-	fn build(&self, app: &mut App) {
-		app.insert_resource(PowerupState {
-			showing: false,
-			options: vec![],
-			selected_index: 0,
-		})
-		.add_systems(
-			Update,
-			(
-				handle_level_up,
-				handle_powerup_navigation,
-				handle_powerup_selection,
-			),
-		);
-	}
-}
-
-#[derive(Resource)]
-pub struct PowerupState {
-	pub showing: bool,
-	pub options: Vec<crate::PowerupDefinition>,
-	pub selected_index: usize,
-}
-
-#[derive(Component)]
-struct PowerupButton {
-	powerup_def: crate::PowerupDefinition,
-	index: usize,
-}
-
-fn apply_powerup(
-	powerup_def: &crate::PowerupDefinition,
-	commands: &mut Commands,
-	player_stats: (
-		&mut crate::player::Player,
-		&mut crate::behaviors::Damageable,
-		&mut crate::behaviors::PlayerEnergy,
-	),
-	weapon_resources: &WeaponResources,
-	weapon_inventory: &mut crate::weapons::WeaponInventory,
-	weapon_level_query: &mut Query<&mut crate::behaviors::WeaponLevel>,
-) {
-	let (player, player_damageable, player_energy) = player_stats;
-	match powerup_def {
-		crate::PowerupDefinition::Weapon(weapon_id) => {
-			// Check if player already owns this weapon
-			if let Some((entity, _current_level)) = weapon_inventory.weapons.get(weapon_id) {
-				// Upgrade existing weapon by incrementing its level
-				// The generic upgrade system will handle the rest
-				let entity = *entity;
-				if let Ok(mut level) = weapon_level_query.get_mut(entity) {
-					level.0 += 1;
-					weapon_inventory
-						.weapons
-						.insert(weapon_id.clone(), (entity, level.0));
-				}
-			} else {
-				// Spawn new weapon
-				if let Some(registry) = weapon_resources.registry.as_ref() {
-					if let Some(handle) = registry.get(weapon_id) {
-						if let Some(weapon_data) = weapon_resources.assets.get(handle) {
-							let entities = crate::weapons::spawn_entity_from_data(
-								commands,
-								weapon_data,
-								1,
-								weapon_id,
-							);
-							if !entities.is_empty() {
-								weapon_inventory
-									.weapons
-									.insert(weapon_id.clone(), (entities[0], 1));
-							}
-						}
-					}
-				}
-			}
-		}
-		crate::PowerupDefinition::StatBoost(boost) => match boost.stat {
-			crate::StatType::Speed => {
-				player.speed += boost.value;
-			}
-			crate::StatType::JumpForce => {
-				player.jump_force += boost.value;
-			}
-			crate::StatType::MaxHealth => {
-				player_damageable.max_health += boost.value;
-				player_damageable.health = player_damageable.max_health;
-			}
-			crate::StatType::EnergyRegen => {
-				player_energy.regen_rate += boost.value;
-			}
-			crate::StatType::RepulsionForce => {
-				player_energy.repulsion_force += boost.value;
-			}
-		},
-	}
-}
-
-fn cleanup_powerup_ui(commands: &mut Commands, ui_state: &mut PowerupUIState) {
+pub fn cleanup_powerup_ui(commands: &mut Commands, ui_state: &mut PowerupUIState) {
 	for entity in ui_state.ui_query.iter() {
 		commands.entity(entity).despawn();
 	}
@@ -186,14 +88,14 @@ fn cleanup_powerup_ui(commands: &mut Commands, ui_state: &mut PowerupUIState) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn handle_level_up(
+pub fn handle_level_up(
 	mut commands: Commands,
 	mut level_up_events: MessageReader<crate::experience::LevelUpEvent>,
-	mut powerup_state: ResMut<PowerupState>,
+	mut powerup_state: ResMut<super::PowerupState>,
 	mut time: ResMut<Time<Virtual>>,
 	game_config: Option<Res<crate::GameConfig>>,
 	config_assets: Res<Assets<crate::GameConfigData>>,
-	weapon_resources: WeaponResources,
+	weapon_resources: super::WeaponResources,
 	weapon_inventory: Res<crate::weapons::WeaponInventory>,
 ) {
 	for _ in level_up_events.read() {
@@ -346,11 +248,8 @@ fn handle_level_up(
 	}
 }
 
-#[derive(Component)]
-struct PowerupUIContainer;
-
 #[allow(clippy::too_many_arguments)]
-fn handle_powerup_selection(
+pub fn handle_powerup_selection(
 	mut commands: Commands,
 	mut interaction_query: Query<
 		(&PowerupButton, &Interaction, &mut BackgroundColor),
@@ -367,7 +266,7 @@ fn handle_powerup_selection(
 		With<crate::behaviors::PlayerTag>,
 	>,
 	input: InputState,
-	weapon_resources: WeaponResources,
+	weapon_resources: super::WeaponResources,
 	mut weapon_inventory: ResMut<crate::weapons::WeaponInventory>,
 	mut weapon_level_query: Query<&mut crate::behaviors::WeaponLevel>,
 ) {
@@ -376,7 +275,7 @@ fn handle_powerup_selection(
 		match *interaction {
 			Interaction::Pressed => {
 				if let Ok((mut player, mut damageable, mut player_energy)) = player_query.single_mut() {
-					apply_powerup(
+					super::application::apply_powerup(
 						&button.powerup_def,
 						&mut commands,
 						(&mut player, &mut damageable, &mut player_energy),
@@ -426,7 +325,7 @@ fn handle_powerup_selection(
 		for button in button_query.iter() {
 			if button.index == ui_state.state.selected_index {
 				if let Ok((mut player, mut damageable, mut player_energy)) = player_query.single_mut() {
-					apply_powerup(
+					super::application::apply_powerup(
 						&button.powerup_def,
 						&mut commands,
 						(&mut player, &mut damageable, &mut player_energy),
@@ -442,7 +341,7 @@ fn handle_powerup_selection(
 	}
 }
 
-fn handle_powerup_navigation(
+pub fn handle_powerup_navigation(
 	mut ui_state: PowerupUIState,
 	input: InputState,
 	mut button_query: Query<(&PowerupButton, &mut BackgroundColor)>,
