@@ -560,8 +560,14 @@ fn handle_energy_charging_input(
 
 			// Spawn repulsion field indicators (only if player has repulsion force)
 			if player_energy.repulsion_force > 0.0 {
-				const REPULSION_RANGE: f32 = crate::constants::REPULSION_RANGE;
+				const MAX_RANGE: f32 = crate::constants::REPULSION_RANGE;
+				const MIN_RANGE: f32 = crate::constants::MIN_REPULSION_RANGE;
+				const MAX_FORCE: f32 = crate::constants::MAX_REPULSION_FORCE;
 				const NUM_RINGS: usize = 8;
+
+				// Calculate effective range based on current repulsion force
+				let force_ratio = (player_energy.repulsion_force / MAX_FORCE).min(1.0);
+				let effective_range = MIN_RANGE + (MAX_RANGE - MIN_RANGE) * force_ratio;
 
 				// Spawn multiple concentric circles with gradient transparency
 				for i in 0..NUM_RINGS {
@@ -572,7 +578,7 @@ fn handle_energy_charging_input(
 					let alpha = 0.05 * (1.0 - ring_fraction * 0.8);
 
 					// Each ring is progressively larger
-					let radius = REPULSION_RANGE * ring_fraction;
+					let radius = effective_range * ring_fraction;
 
 					// Create a circle mesh
 					let circle_mesh = Circle::new(radius);
@@ -619,6 +625,8 @@ fn apply_repulsion_field(
 	mut enemy_query: RepulsionEnemyQuery,
 ) {
 	const MAX_RANGE: f32 = crate::constants::REPULSION_RANGE;
+	const MIN_RANGE: f32 = crate::constants::MIN_REPULSION_RANGE;
+	const MAX_FORCE: f32 = crate::constants::MAX_REPULSION_FORCE;
 	const BASE_SPEED: f32 = crate::constants::REPULSION_BASE_SPEED;
 
 	// Only apply if player is charging
@@ -627,6 +635,10 @@ fn apply_repulsion_field(
 		if player_energy.repulsion_force <= 0.0 {
 			return;
 		}
+
+		// Calculate effective range based on current repulsion force
+		let force_ratio = (player_energy.repulsion_force / MAX_FORCE).min(1.0);
+		let effective_range = MIN_RANGE + (MAX_RANGE - MIN_RANGE) * force_ratio;
 
 		// Apply repulsion velocity to all enemies within range
 		// Speed formula: (powerup_level * base_speed * distance_falloff) / sqrt(enemy_max_health)
@@ -641,8 +653,8 @@ fn apply_repulsion_field(
 			);
 			let distance = direction_to_enemy.length();
 
-			// Only apply repulsion within range
-			if !(0.1..=MAX_RANGE).contains(&distance) {
+			// Only apply repulsion within effective range
+			if !(0.1..=effective_range).contains(&distance) {
 				continue;
 			}
 
@@ -653,7 +665,7 @@ fn apply_repulsion_field(
 			let direction = direction_to_enemy / distance;
 
 			// Distance-based falloff (closer = stronger push)
-			let distance_factor = 1.0 - (distance / MAX_RANGE);
+			let distance_factor = 1.0 - (distance / effective_range);
 
 			// Calculate repulsion speed scaled by enemy max health (sqrt for gentler scaling)
 			// Tankier enemies resist better but still get pushed
